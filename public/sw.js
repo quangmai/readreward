@@ -1,61 +1,45 @@
-/* ═══════════════════════════════════════════
-   ReadReward — Service Worker (Push Notifications)
-   Place this at: public/sw.js
-   ═══════════════════════════════════════════ */
+/* ReadReward — Service Worker */
 
-   self.addEventListener('push', (event) => {
-    let data = { title: 'ReadReward', body: 'You have a new notification!', icon: '/icon-192.png' };
-    
+self.addEventListener('push', function(event) {
+  var data = { title: 'ReadReward', body: 'You have a new update!', icon: '/icon-192.png' };
+
+  if (event.data) {
     try {
-      if (event.data) {
-        data = { ...data, ...event.data.json() };
-      }
+      var parsed = event.data.json();
+      if (parsed.title) data.title = parsed.title;
+      if (parsed.body) data.body = parsed.body;
+      if (parsed.icon) data.icon = parsed.icon;
     } catch (e) {
-      if (event.data) {
-        data.body = event.data.text();
+      try {
+        var text = event.data.text();
+        if (text) data.body = text;
+      } catch (e2) {
+        // use defaults
       }
     }
-  
-    const options = {
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/icon-192.png',
+      icon: data.icon,
       badge: '/icon-192.png',
-      vibrate: [100, 50, 100],
-      data: {
-        url: data.url || '/',
-        type: data.type || 'general',
-      },
-      actions: data.actions || [],
-    };
-  
-    event.waitUntil(
-      self.registration.showNotification(data.title, options)
-    );
-  });
-  
-  self.addEventListener('notificationclick', (event) => {
-    event.notification.close();
-  
-    const url = event.notification.data?.url || '/';
-  
-    event.waitUntil(
-      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-        // If the app is already open, focus it
-        for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            return client.focus();
-          }
-        }
-        // Otherwise open a new window
-        return clients.openWindow(url);
-      })
-    );
-  });
-  
-  self.addEventListener('install', (event) => {
-    self.skipWaiting();
-  });
-  
-  self.addEventListener('activate', (event) => {
-    event.waitUntil(clients.claim());
-  });
+      vibrate: [100, 50, 100]
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        if ('focus' in clientList[i]) return clientList[i].focus();
+      }
+      return clients.openWindow('/');
+    })
+  );
+});
+
+self.addEventListener('install', function() { self.skipWaiting(); });
+self.addEventListener('activate', function(event) { event.waitUntil(clients.claim()); });
