@@ -227,8 +227,8 @@ function Wrap({children}) {
 /* ─────────────────────────────────────────────
    SETUP TAB COMPONENT
 ───────────────────────────────────────────── */
-function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDiffBonuses,calcPts,onLogout,onSaveReward,onDeleteReward,onSaveBonus,onChangePin}) {
-  const [section, setSection] = useState("exchange"); // exchange | pins | account
+function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDiffBonuses,calcPts,onLogout,onSaveReward,onDeleteReward,onSaveBonus,onChangePin,pushPermission,onEnablePush,notifPrefs,onUpdateNotifPrefs}) {
+  const [section, setSection] = useState("exchange"); // exchange | pins | notifications | account
   const [editingRewardId, setEditingRewardId] = useState(null);
   const [newRewardForm, setNewRewardForm] = useState({label:"",icon:"🎯",unit:"mins",rate:2,color:"#3B82F6",showIconPicker:false,showColorPicker:false});
   const [showNewRewardForm, setShowNewRewardForm] = useState(false);
@@ -283,8 +283,9 @@ function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDi
   const sampleDiff = "medium";
 
   const NAV_TABS = [
-    {id:"exchange", label:"💱 Exchange Rate"},
-    {id:"pins",     label:"🔒 Child PINs"},
+    {id:"exchange", label:"💱 Rates"},
+    {id:"pins",     label:"🔒 PINs"},
+    {id:"notifications", label:"🔔 Notifs"},
     {id:"account",  label:"👤 Account"},
   ];
 
@@ -580,6 +581,68 @@ function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDi
         </div>
       )}
 
+      {/* ── NOTIFICATIONS ── */}
+      {section==="notifications" && (
+        <>
+          {/* Push permission status */}
+          <div className="card" style={{padding:16,marginBottom:14}}>
+            <div style={{fontWeight:800,fontSize:15,marginBottom:10}}>🔔 Push Notifications</div>
+            {pushPermission==="granted" && (
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{width:10,height:10,borderRadius:"50%",background:"#27AE60"}}/>
+                <div style={{fontSize:13,color:"#27AE60",fontWeight:700}}>Enabled on this device</div>
+              </div>
+            )}
+            {pushPermission==="denied" && (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <div style={{width:10,height:10,borderRadius:"50%",background:"#E74C3C"}}/>
+                  <div style={{fontSize:13,color:"#E74C3C",fontWeight:700}}>Blocked on this device</div>
+                </div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",lineHeight:1.5}}>
+                  To re-enable: open your browser settings → Site Settings → Notifications → find ReadReward → Allow.
+                </div>
+              </div>
+            )}
+            {pushPermission==="default" && (
+              <div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginBottom:12,lineHeight:1.5}}>Get notified when your kids log reading sessions or request rewards.</div>
+                <button className="btn" onClick={onEnablePush} style={{width:"100%",padding:"11px 0",fontSize:13,background:"linear-gradient(135deg,#FF6B35,#FF8E53)",color:"#fff"}}>Enable Push Notifications</button>
+              </div>
+            )}
+            {pushPermission==="unsupported" && (
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",lineHeight:1.5}}>
+                Push notifications are not supported on this browser. Try Chrome or Edge on desktop, or install the app to your home screen on mobile.
+              </div>
+            )}
+          </div>
+
+          {/* Notification type preferences */}
+          {pushPermission==="granted" && (
+            <div className="card" style={{padding:16,marginBottom:14}}>
+              <div style={{fontWeight:800,fontSize:15,marginBottom:12}}>What to notify me about</div>
+              {[
+                {key:"reading_logs", label:"Reading log submissions", desc:"When a child logs pages and needs review", icon:"📖"},
+                {key:"redemptions", label:"Reward redemptions", desc:"When a child wants to spend rewards", icon:"🎁"},
+              ].map(pref=>(
+                <div key={pref.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingBottom:12,marginBottom:12,borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+                  <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                    <div style={{fontSize:20}}>{pref.icon}</div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:13}}>{pref.label}</div>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{pref.desc}</div>
+                    </div>
+                  </div>
+                  <button onClick={()=>onUpdateNotifPrefs(pref.key, !notifPrefs[pref.key])} style={{width:48,height:26,borderRadius:13,border:"none",background:notifPrefs[pref.key]?"#27AE60":"rgba(255,255,255,0.15)",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+                    <div style={{width:22,height:22,borderRadius:"50%",background:"white",position:"absolute",top:2,left:notifPrefs[pref.key]?24:2,transition:"left 0.2s"}}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
       {/* ── ACCOUNT ── */}
       {section==="account" && (
         <>
@@ -810,6 +873,7 @@ export default function App() {
   const [newBadge, setNewBadge]         = useState(null); // for celebration popup
   const [pushPermission, setPushPermission] = useState('default'); // 'default'|'granted'|'denied'|'unsupported'
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState({ reading_logs: true, redemptions: true });
 
   /* ── mode inside app ── */
   // mode: "child" | "parent"
@@ -1040,8 +1104,8 @@ export default function App() {
     },...p]);
     setLogForm({book:null,pages:"",reward:rewards[0]?.id||""}); setChildView("home"); setConfirmLog(false);
     checkAchievements(activeChildId);
-    // Notify parent
-    if (pushParentId) {
+    // Notify parent (if preference enabled)
+    if (pushParentId && notifPrefs.reading_logs) {
       sendPushNotification({
         parentId: pushParentId,
         title: `📖 ${pushChildName} logged reading!`,
@@ -1106,8 +1170,8 @@ export default function App() {
     },...p]);
     setRedeemReward(null);
     setChildView("home");
-    // Notify parent if pending (not auto-approved)
-    if (status === "pending" && parentAccount?.id) {
+    // Notify parent if pending (not auto-approved) and preference enabled
+    if (status === "pending" && parentAccount?.id && notifPrefs.redemptions) {
       sendPushNotification({
         parentId: parentAccount.id,
         title: `🎁 ${childName} wants to redeem!`,
@@ -2275,6 +2339,10 @@ export default function App() {
                   if(dbErr) return dbErr.message;
                   return null; // success
                 }}
+                pushPermission={pushPermission}
+                onEnablePush={handleEnablePush}
+                notifPrefs={notifPrefs}
+                onUpdateNotifPrefs={(key, val) => setNotifPrefs(p=>({...p,[key]:val}))}
               />
             )}
           </>
@@ -2307,7 +2375,10 @@ export default function App() {
         )}
         {mode==="parent" && (
           <>
-            <button className={`btn nav-btn ${parentView==="dashboard"?"nav-btn-active":"nav-btn-inactive"}`} onClick={()=>setParentView("dashboard")}>🏠 Home</button>
+            <button className={`btn nav-btn ${parentView==="dashboard"?"nav-btn-active":"nav-btn-inactive"}`} onClick={()=>setParentView("dashboard")} style={{position:"relative"}}>
+              🏠 Home
+              {(pendingLogs.length+pendingRedemptions.length)>0&&<span style={{position:"absolute",top:4,right:8,background:"#E74C3C",color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,minWidth:16,textAlign:"center"}}>{pendingLogs.length+pendingRedemptions.length}</span>}
+            </button>
             <button className={`btn nav-btn ${parentView==="setup"?"nav-btn-active":"nav-btn-inactive"}`} onClick={()=>setParentView("setup")}>⚙️ Setup</button>
             <button className="btn nav-btn nav-btn-inactive" onClick={()=>{setChildPickMode(true);setActiveChildId(null);setMode("child");}}>👧 Kids</button>
           </>
