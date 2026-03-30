@@ -1011,6 +1011,12 @@ export default function App() {
     const updatedPages = logForm.book.pagesRead + pages;
     await updateBookInDb(logForm.book.id, { pages_read: updatedPages });
     // Update local state
+    // Capture data for push notification before resetting form
+    const pushChildName = children.find(c=>c.id===activeChildId)?.name || "Your child";
+    const pushPages = pages;
+    const pushBookTitle = logForm.book.title;
+    const pushParentId = parentAccount?.id;
+
     setBooks(p=>p.map(b=>b.id===logForm.book.id?{...b,pagesRead:updatedPages}:b));
     setLogs(p=>[{
       id: newLog.id, childId: newLog.child_id,
@@ -1021,14 +1027,13 @@ export default function App() {
     setLogForm({book:null,pages:"",reward:rewards[0]?.id||""}); setChildView("home"); setConfirmLog(false);
     checkAchievements(activeChildId);
     // Notify parent
-    if (parentAccount?.id) {
-      const child = children.find(c=>c.id===activeChildId);
+    if (pushParentId) {
       sendPushNotification({
-        parentId: parentAccount.id,
-        title: `📖 ${child?.name || "Your child"} logged reading!`,
-        body: `${logForm.pages} pages of ${logForm.book?.title || "a book"} — waiting for your review.`,
+        parentId: pushParentId,
+        title: `📖 ${pushChildName} logged reading!`,
+        body: `${pushPages} pages of ${pushBookTitle} — waiting for your review.`,
         type: "new_log",
-      }).catch(()=>{});
+      }).then(r => console.log("Push send result:", r)).catch(err => console.error("Push send error:", err));
     }
   }
   async function markDone(bookId) {
