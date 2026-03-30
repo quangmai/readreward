@@ -728,18 +728,32 @@ export default function App() {
       })));
       // Check push permission after data loads
       const perm = getPushPermission();
+      console.log("Push permission on load:", perm);
       setPushPermission(perm);
       // Register SW eagerly (needed for push to work)
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(()=>{});
+        try {
+          await navigator.serviceWorker.register('/sw.js');
+          await navigator.serviceWorker.ready;
+          console.log("Service worker ready");
+        } catch (swErr) {
+          console.error("SW registration failed:", swErr);
+        }
       }
       if (perm === 'default') {
         setTimeout(() => setShowPushPrompt(true), 2000);
       } else if (perm === 'granted') {
         // Already granted — ensure subscription is saved
-        subscribeToPush().then(({ subscription }) => {
-          if (subscription) savePushSubscription(subscription);
-        }).catch(()=>{});
+        try {
+          const { subscription, error } = await subscribeToPush();
+          console.log("Auto-subscribe result:", { subscription: !!subscription, error });
+          if (subscription) {
+            const saveResult = await savePushSubscription(subscription);
+            console.log("Auto-save result:", saveResult);
+          }
+        } catch (pushErr) {
+          console.error("Auto-subscribe error:", pushErr);
+        }
       }
     } catch (err) {
       console.error("loadParentData error:", err);
