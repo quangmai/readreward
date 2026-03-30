@@ -1089,6 +1089,7 @@ export default function App() {
     if(balance[reward.id] < tier.amount) return;
     setAuthLoading(true);
     const status = reward.autoApprove ? "approved" : "pending";
+    const childName = children.find(c=>c.id===activeChildId)?.name || "Your child";
     const { data: newR, error } = await addRedemptionToDb({
       childId: activeChildId,
       rewardTypeId: reward.id,
@@ -1105,6 +1106,15 @@ export default function App() {
     },...p]);
     setRedeemReward(null);
     setChildView("home");
+    // Notify parent if pending (not auto-approved)
+    if (status === "pending" && parentAccount?.id) {
+      sendPushNotification({
+        parentId: parentAccount.id,
+        title: `🎁 ${childName} wants to redeem!`,
+        body: `${tier.label} ${reward.label} (${tier.amount} ${reward.unit}) — needs your approval.`,
+        type: "new_redemption",
+      }).catch(err => console.error("Push error:", err));
+    }
   }
   async function approveRedemption(id) {
     setAuthLoading(true);
