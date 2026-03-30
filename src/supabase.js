@@ -540,7 +540,7 @@ export async function subscribeToPush() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.register('/sw.js', { type: 'module' });
     await navigator.serviceWorker.ready;
 
     // Check if already subscribed

@@ -731,7 +731,7 @@ export default function App() {
       setPushPermission(perm);
       // Register SW eagerly (needed for push to work)
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(()=>{});
+        navigator.serviceWorker.register('/sw.js', { type: 'module' }).catch(()=>{});
       }
       if (perm === 'default') {
         setTimeout(() => setShowPushPrompt(true), 2000);
