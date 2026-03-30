@@ -1,5 +1,82 @@
-/* ReadReward — Service Worker */
+/* ReadReward — Service Worker (PWA + Push) */
 
+var CACHE_NAME = 'readreward-v1';
+var SHELL_URLS = [
+  '/',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/manifest.json'
+];
+
+/* ── Install: cache app shell ── */
+self.addEventListener('install', function(event) {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(function(cache) {
+      return cache.addAll(SHELL_URLS);
+    }).then(function() {
+      return self.skipWaiting();
+    })
+  );
+});
+
+/* ── Activate: clean old caches ── */
+self.addEventListener('activate', function(event) {
+  event.waitUntil(
+    caches.keys().then(function(names) {
+      return Promise.all(
+        names.filter(function(name) { return name !== CACHE_NAME; })
+             .map(function(name) { return caches.delete(name); })
+      );
+    }).then(function() {
+      return clients.claim();
+    })
+  );
+});
+
+/* ── Fetch: network-first for API, cache-first for shell ── */
+self.addEventListener('fetch', function(event) {
+  var url = new URL(event.request.url);
+
+  // Skip non-GET and cross-origin API calls
+  if (event.request.method !== 'GET') return;
+  if (url.origin !== self.location.origin) return;
+
+  // For navigation requests (HTML pages), try network first, fallback to cache
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(function(response) {
+        // Cache the latest version
+        var clone = response.clone();
+        caches.open(CACHE_NAME).then(function(cache) {
+          cache.put(event.request, clone);
+        });
+        return response;
+      }).catch(function() {
+        return caches.match('/') || caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  // For static assets (JS, CSS, images), try cache first, then network
+  if (url.pathname.match(/\.(js|css|png|jpg|svg|ico|woff2?)$/)) {
+    event.respondWith(
+      caches.match(event.request).then(function(cached) {
+        if (cached) return cached;
+        return fetch(event.request).then(function(response) {
+          var clone = response.clone();
+          caches.open(CACHE_NAME).then(function(cache) {
+            cache.put(event.request, clone);
+          });
+          return response;
+        });
+      })
+    );
+    return;
+  }
+});
+
+/* ── Push notifications ── */
 self.addEventListener('push', function(event) {
   var data = { title: 'ReadReward', body: 'You have a new update!', icon: '/icon-192.png', type: 'general', url: '/' };
 
@@ -21,7 +98,6 @@ self.addEventListener('push', function(event) {
     }
   }
 
-  // Deep link based on notification type
   var targetUrl = '/';
   if (data.type === 'new_log' || data.type === 'new_redemption') {
     targetUrl = '/?view=dashboard';
@@ -40,6 +116,7 @@ self.addEventListener('push', function(event) {
   );
 });
 
+/* ── Notification click → deep link ── */
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   var url = (event.notification.data && event.notification.data.url) || '/';
@@ -47,22 +124,15 @@ self.addEventListener('notificationclick', function(event) {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      // Try to find an existing window and navigate it
       for (var i = 0; i < clientList.length; i++) {
         var client = clientList[i];
         if (client.url.indexOf(self.location.origin) !== -1 && 'focus' in client) {
           client.focus();
-          if ('navigate' in client) {
-            return client.navigate(fullUrl);
-          }
+          if ('navigate' in client) return client.navigate(fullUrl);
           return client;
         }
       }
-      // No existing window — open new one
       return clients.openWindow(fullUrl);
     })
   );
 });
-
-self.addEventListener('install', function() { self.skipWaiting(); });
-self.addEventListener('activate', function(event) { event.waitUntil(clients.claim()); });
