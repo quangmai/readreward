@@ -585,3 +585,47 @@ input, button { font-family: 'Calibri', 'Candara', 'Segoe UI', sans-serif; }
 .reset-success-title { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
 .reset-success-body { font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 8px; line-height: 1.6; }
 .reset-success-hint { font-size: 13px; color: rgba(255,255,255,0.3); margin-bottom: 28px; }
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE — Tablet & Desktop
+   ═══════════════════════════════════════════ */
+
+/* Center content on larger screens */
+@media (min-width: 640px) {
+  .app-wrap { display: flex; flex-direction: column; align-items: center; }
+  .app-header { max-width: 600px; width: 100%; }
+  .app-content { max-width: 600px; width: 100%; }
+  .bottom-nav { max-width: 600px; left: 50%; transform: translateX(-50%); border-radius: 20px 20px 0 0; }
+  .auth-page { max-width: 440px; margin: 0 auto; }
+  .landing { max-width: 440px; margin: 0 auto; }
+}
+
+@media (min-width: 1024px) {
+  .app-header { max-width: 720px; }
+  .app-content { max-width: 720px; }
+  .bottom-nav { max-width: 720px; }
+  
+  /* Two-column layout for dashboard on desktop */
+  .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .dashboard-full-width { grid-column: 1 / -1; }
+}
+
+/* ── Improved touch targets ── */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .nav-btn { min-height: 48px; }
+  .pin-input { width: 56px; height: 64px; font-size: 26px; }
+  .book-slot-log-btn, .book-slot-done-btn { min-height: 36px; font-size: 11px; }
+}
+
+/* ── Larger screens: bigger book slots ── */
+@media (min-width: 420px) {
+  .book-slot-empty { height: 260px; }
+}
+
+/* ── Print styles (for CSV alternative) ── */
+@media print {
+  .bottom-nav, .app-header-actions, .btn { display: none !important; }
+  .app-wrap { background: white !important; color: black !important; }
+  .card { background: white !important; border: 1px solid #ddd !important; color: black !important; }
+}

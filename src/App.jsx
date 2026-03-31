@@ -2230,8 +2230,8 @@ export default function App() {
 
             {/* ADD CHILD */}
             {parentView==="addChild" && (
-              <div className="pop">
-                <button className="btn" onClick={()=>setParentView("dashboard")} style={{background:"rgba(255,255,255,0.1)",color:"#fff",padding:"7px 14px",marginBottom:16,fontSize:14}}>← Back</button>
+              <div className="slide-up">
+                <button className="btn btn-ghost" onClick={()=>setParentView("dashboard")} style={{marginBottom:16}}>← Back</button>
                 <div style={{fontSize:20,fontWeight:900,marginBottom:20}}>👧 Add a Child</div>
                 <div className="card" style={{padding:16,marginBottom:12}}>
                   <div className="slabel">CHOOSE AN AVATAR</div>
@@ -2268,8 +2268,8 @@ export default function App() {
               if(!child) return null;
               const cBooks=books.filter(b=>b.childId===detailChildId);
               const cLogs=logs.filter(l=>l.childId===detailChildId);
-              const cEarned=cLogs.filter(l=>l.status==="approved").reduce((acc,l)=>{
-                const r=rewards.find(r=>r.id===l.reward) || {id:"?",label:"Reward",icon:"🎯",unit:"mins",rate:1,color:"#888"};
+              const cApproved=cLogs.filter(l=>l.status==="approved");
+              const cEarned=cApproved.reduce((acc,l)=>{
                 acc[l.reward]=(acc[l.reward]||0)+calcPts(l.pages, l.difficulty, l.reward);
                 return acc;
               },{});
@@ -2279,13 +2279,33 @@ export default function App() {
               },{});
               const cBalance=rewards.reduce((acc,r)=>{acc[r.id]=Math.max(0,(cEarned[r.id]||0)-(cRedeemed[r.id]||0));return acc;},{});
               const isEditingPin = editChildPin.id===child.id;
-              return <div className="pop">
-                <button className="btn" onClick={()=>setParentView("dashboard")} style={{background:"rgba(255,255,255,0.1)",color:"#fff",padding:"7px 14px",marginBottom:16,fontSize:14}}>← Back</button>
+
+              // CSV export handler
+              function exportCSV() {
+                const header = "Date,Book,Pages,Difficulty,Status,Reward Type\n";
+                const rows = cLogs.map(l => {
+                  const d = l.date === "Just now" ? new Date().toISOString() : l.date;
+                  const rw = rewards.find(r=>r.id===l.reward);
+                  return `"${d}","${l.bookTitle}",${l.pages},"${l.difficulty}","${l.status}","${rw?.label||l.reward}"`;
+                }).join("\n");
+                const blob = new Blob([header+rows], {type:"text/csv"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = `${child.name}-reading-history.csv`;
+                a.click(); URL.revokeObjectURL(url);
+              }
+
+              return <div className="slide-up">
+                <button className="btn btn-ghost" onClick={()=>setParentView("dashboard")} style={{marginBottom:16}}>← Back</button>
                 <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20}}>
                   <Avatar child={child} size={56} ring/>
-                  <div><div style={{fontSize:22,fontWeight:900}}>{child.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>{cBooks.filter(b=>b.done).length} completed · {cLogs.filter(l=>l.status==="approved").length} sessions</div></div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:22,fontWeight:900}}>{child.name}</div>
+                    <div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>{cBooks.filter(b=>b.done).length} completed · {cApproved.length} sessions</div>
+                  </div>
+                  {cLogs.length>0 && <button className="btn" onClick={exportCSV} style={{background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.5)",padding:"8px 12px",fontSize:11}}>📥 CSV</button>}
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>{rewards.map(r=><RewardPill key={r.id} reward={r} earned={cBalance[r.id]||0}/>)}</div>
+                <div className="reward-grid" style={{marginBottom:16}}>{rewards.map(r=><RewardPill key={r.id} reward={r} earned={cBalance[r.id]||0}/>)}</div>
 
                 {/* PIN section */}
                 <div className="card" style={{padding:16,marginBottom:16,border:"1px solid rgba(255,255,255,0.15)"}}>
@@ -2300,7 +2320,7 @@ export default function App() {
                     <div style={{marginBottom:12}}><div className="slabel" style={{marginTop:12}}>NEW PIN</div><PinPad length={4} value={editChildPin.pin} onChange={v=>setEditChildPin(f=>({...f,pin:v,error:""}))} /></div>
                     <div style={{marginBottom:14}}><div className="slabel">CONFIRM PIN</div><PinPad length={4} value={editChildPin.confirm} onChange={v=>setEditChildPin(f=>({...f,confirm:v,error:""}))} error={editChildPin.error}/></div>
                     <div style={{display:"flex",gap:10}}>
-                      <button className="btn" onClick={saveChildPin} disabled={authLoading} style={{flex:2,padding:"11px 0",background:"linear-gradient(135deg,#27AE60,#2ECC71)",color:"#fff",fontSize:14,opacity:authLoading?0.6:1}}>{authLoading?"Saving…":"Save PIN"}</button>
+                      <button className="btn btn-green" onClick={saveChildPin} disabled={authLoading} style={{flex:2,padding:"11px 0",fontSize:14,opacity:authLoading?0.6:1}}>{authLoading?"Saving…":"Save PIN"}</button>
                       <button className="btn" onClick={()=>setEditChildPin({id:null,pin:"",confirm:"",error:""})} style={{flex:1,padding:"11px 0",background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.5)",fontSize:14}}>Cancel</button>
                     </div>
                   </div>}
@@ -2315,9 +2335,9 @@ export default function App() {
                       <div className="slabel">BADGES ({earnedCount}/{BADGES.length})</div>
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                         {BADGES.filter(b=>childAch.some(a=>a.badgeId===b.id)).map(badge=>(
-                          <div key={badge.id} style={{background:"rgba(244,208,63,0.1)",border:"1px solid rgba(244,208,63,0.25)",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontSize:16}}>{badge.icon}</span>
-                            <span style={{fontSize:11,fontWeight:700,color:"#F4D03F"}}>{badge.label}</span>
+                          <div key={badge.id} className="badge-pill">
+                            <span className="badge-pill-icon">{badge.icon}</span>
+                            <span className="badge-pill-label">{badge.label}</span>
                           </div>
                         ))}
                       </div>
@@ -2326,12 +2346,38 @@ export default function App() {
                 })()}
 
                 {/* Books */}
-                <div className="slabel">BOOKS</div>
+                <div className="slabel">BOOKS ({cBooks.length})</div>
+                {cBooks.length===0 && <div className="card empty-state" style={{padding:"20px 14px"}}><div className="empty-state-icon">📚</div><div className="empty-state-body">No books added yet.</div></div>}
                 {cBooks.map(b=><div key={b.id} className="card" style={{padding:"12px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"center"}}>
                   <div style={{width:36,flexShrink:0,borderRadius:6,overflow:"hidden"}}><div style={{paddingBottom:"144%",position:"relative"}}><img src={b.cover} alt={b.title} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/></div></div>
                   <div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{b.title}</div><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>{b.pagesRead}/{b.totalPages} pp · {b.difficulty}</div><div style={{marginTop:6,background:"rgba(255,255,255,0.08)",borderRadius:20,height:4}}><div style={{height:"100%",borderRadius:20,width:`${Math.min(100,(b.pagesRead/b.totalPages)*100)}%`,background:"linear-gradient(90deg,#FF6B35,#FF8E53)"}}/></div></div>
                   {b.done&&<div style={{fontSize:20}}>✅</div>}
                 </div>)}
+
+                {/* Reading history */}
+                {cLogs.length>0 && (
+                  <>
+                    <div className="slabel" style={{marginTop:16}}>READING HISTORY ({cLogs.length})</div>
+                    {cLogs.slice(0,10).map(log=>{
+                      const r=rewards.find(r=>r.id===log.reward) || {id:"?",label:"?",icon:"🎯",unit:"mins",rate:1,color:"#888"};
+                      const pts=calcPts(log.pages, log.difficulty, log.reward);
+                      const d = log.date === "Just now" ? new Date() : new Date(log.date);
+                      const fmtDate = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+                      return <div key={log.id} className="card" style={{padding:"10px 12px",marginBottom:6,display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{fontSize:16}}>{log.status==="approved"?"✅":log.status==="pending"?"⏳":"❌"}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:800,fontSize:13}}>{log.bookTitle}</div>
+                          <div style={{fontSize:10,color:"rgba(255,255,255,0.35)"}}>{log.pages}pp · {log.difficulty} · {fmtDate}</div>
+                        </div>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:12,fontWeight:900,color:r.color}}>{r.icon} {pts}{r.unit==="p"?"p":` ${r.unit}`}</div>
+                          <Badge color={log.status==="approved"?"#27AE60":log.status==="pending"?"#F39C12":"#E74C3C"}>{log.status}</Badge>
+                        </div>
+                      </div>;
+                    })}
+                    {cLogs.length>10 && <div style={{textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.3)",padding:8}}>Showing 10 of {cLogs.length} — export CSV for full history</div>}
+                  </>
+                )}
               </div>;
             })()}
 
