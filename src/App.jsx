@@ -1526,7 +1526,7 @@ export default function App() {
           {mode==="child" && activeChild && (
             <div className="app-header-actions">
               <Avatar child={activeChild} size={32} ring/>
-              <button className="btn btn-ghost-sm" onClick={handleParentAccess}>👨‍👩‍👧</button>
+              <button className="btn btn-ghost-sm" onClick={handleParentAccess} aria-label="Parent dashboard">👨‍👩‍👧</button>
             </div>
           )}
           {mode==="parent" && (
@@ -1584,11 +1584,19 @@ export default function App() {
                 <div className="card" style={{padding:14,marginBottom:14}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <div className="slabel" style={{margin:0}}>MY READING LIST ({myActive.length}/{MAX_BOOKS})</div>
-                    {!canAddBook&&<span style={{fontSize:10,color:"#FF6B35",fontWeight:700}}>Finish a book first!</span>}
+                    {!canAddBook&&myActive.length>0&&<span style={{fontSize:10,color:"#FF6B35",fontWeight:700}}>Finish a book first!</span>}
                   </div>
-                  <div style={{display:"flex",gap:8}}>{slots.map((b,i)=><BookSlot key={i} book={b} onMarkDone={markDone} onLogReading={b=>{ setLogForm({book:b,pages:"",reward:rewards[0]?.id||""}); setConfirmLog(false); setChildView("logReading"); }}/>)}</div>
-                  <button className="btn" onClick={()=>canAddBook&&setChildView("addBook")} style={{width:"100%",marginTop:10,padding:"11px 0",fontSize:14,background:canAddBook?"linear-gradient(135deg,#4776E6,#8E54E9)":"rgba(255,255,255,0.05)",color:canAddBook?"#fff":"rgba(255,255,255,0.25)",cursor:canAddBook?"pointer":"not-allowed",boxShadow:canAddBook?"0 4px 16px rgba(71,118,230,0.35)":"none"}}>
-                    {canAddBook?"＋ Add a Book":"🔒 Complete a book first"}
+                  {myBooks.length===0 ? (
+                    <div className="empty-state" style={{padding:"20px 10px"}}>
+                      <div className="empty-state-icon float">📚</div>
+                      <div className="empty-state-title">Your bookshelf is empty!</div>
+                      <div className="empty-state-body">Add your first book to start earning rewards for reading.</div>
+                    </div>
+                  ) : (
+                    <div style={{display:"flex",gap:8}}>{slots.map((b,i)=><BookSlot key={i} book={b} onMarkDone={markDone} onLogReading={b=>{ setLogForm({book:b,pages:"",reward:rewards[0]?.id||""}); setConfirmLog(false); setChildView("logReading"); }}/>)}</div>
+                  )}
+                  <button className="btn" onClick={()=>canAddBook&&setChildView("addBook")} aria-label={canAddBook?"Add a new book":"Complete a book first"} style={{width:"100%",marginTop:10,padding:"13px 0",fontSize:14,background:canAddBook?"linear-gradient(135deg,#4776E6,#8E54E9)":"rgba(255,255,255,0.05)",color:canAddBook?"#fff":"rgba(255,255,255,0.25)",cursor:canAddBook?"pointer":"not-allowed",boxShadow:canAddBook?"0 4px 16px rgba(71,118,230,0.35)":"none"}}>
+                    {myBooks.length===0?"📖 Add Your First Book!":canAddBook?"＋ Add a Book":"🔒 Complete a book first"}
                   </button>
                 </div>
                 {/* YTD pages (approved only) */}
@@ -1703,15 +1711,19 @@ export default function App() {
                         {isExpanded && <div style={{marginTop:6}}>{week.items.map(item => item.node)}</div>}
                       </div>
                     );
-                  }) : <div className="card" style={{padding:28,textAlign:"center",color:"rgba(255,255,255,0.3)"}}><div style={{fontSize:36,marginBottom:8}}>📖</div>No activity yet — start reading!</div>;
+                  }) : <div className="card empty-state">
+                    <div className="empty-state-icon">📖</div>
+                    <div className="empty-state-title">No reading yet!</div>
+                    <div className="empty-state-body">Add a book and start logging pages to see your activity here. Every session you log earns rewards!</div>
+                  </div>;
                 })()}
               </>
             )}
 
             {/* ADD BOOK */}
             {childView==="addBook" && (
-              <div className="pop">
-                <button className="btn" onClick={()=>{setChildView("home");setAddBookForm(EMPTY_BOOK);}} style={{background:"rgba(255,255,255,0.1)",color:"#fff",padding:"7px 14px",marginBottom:16,fontSize:14}}>← Back</button>
+              <div className="slide-up">
+                <button className="btn btn-ghost" onClick={()=>{setChildView("home");setAddBookForm(EMPTY_BOOK);}} style={{marginBottom:16}}>← Back</button>
                 <div style={{fontSize:20,fontWeight:900,marginBottom:18}}>📖 Add a New Book</div>
                 <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:16}}>
                   <div onClick={()=>coverInputRef.current?.click()} style={{width:90,flexShrink:0,cursor:"pointer",borderRadius:10,overflow:"hidden",border:addBookForm.cover?"2px solid rgba(255,255,255,0.25)":"2px dashed rgba(255,255,255,0.2)",position:"relative"}}>
@@ -1741,8 +1753,8 @@ export default function App() {
 
             {/* LOG READING */}
             {childView==="logReading" && logForm.book && (
-              <div className="pop">
-                <button className="btn" onClick={()=>setChildView("home")} style={{background:"rgba(255,255,255,0.1)",color:"#fff",padding:"7px 14px",marginBottom:14,fontSize:14}}>← Back</button>
+              <div className="slide-up">
+                <button className="btn btn-ghost" onClick={()=>setChildView("home")} style={{marginBottom:14}}>← Back</button>
                 <div style={{fontSize:20,fontWeight:900,marginBottom:14}}>📖 Log Reading Session</div>
                 <div className="card" style={{padding:14,marginBottom:12,display:"flex",gap:14,alignItems:"center"}}>
                   <div style={{width:52,flexShrink:0,borderRadius:8,overflow:"hidden"}}><div style={{paddingBottom:"144%",position:"relative"}}><img src={logForm.book.cover} alt={logForm.book.title} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/></div></div>
@@ -1798,18 +1810,35 @@ export default function App() {
               const r=rewards.find(r=>r.id===celebrated.reward) || {id:"?",label:"Reward",icon:"🎯",unit:"mins",rate:1,color:"#888"};
               const pts=calcPts(celebrated.pages, celebrated.difficulty, celebrated.reward);
               const child=children.find(c=>c.id===celebrated.childId);
-              return <div className="pop" style={{textAlign:"center",padding:"36px 10px"}}>
-                {child&&<div style={{display:"flex",justifyContent:"center",marginBottom:12}}><Avatar child={child} size={56} ring/></div>}
-                <div style={{fontSize:76,animation:"float 2s ease-in-out infinite"}}>🎉</div>
-                <div style={{fontSize:26,fontWeight:900,margin:"18px 0 8px"}}>{child?.name}, awesome reading!</div>
-                <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:celebrated.adjusted?8:26}}>{celebrated.bookTitle} — {celebrated.pages} pages approved!</div>
-                {celebrated.adjusted&&<div style={{fontSize:12,color:"#F59E0B",marginBottom:20,fontWeight:700}}>⚡ Adjusted from {celebrated.originalPages} pages</div>}
-                <div style={{background:r.color+"20",border:`2px solid ${r.color}40`,borderRadius:22,padding:"26px 34px",marginBottom:26,display:"inline-block"}}>
-                  <div style={{fontSize:50}}>{r.icon}</div><div style={{fontSize:42,fontWeight:900,color:r.color}}>{pts}</div>
-                  <div style={{fontSize:15,color:"rgba(255,255,255,0.6)"}}>{r.unit==="p"?"pence earned":`${r.unit} of ${r.label}`}</div>
-                </div><br/>
-                <button className="btn" onClick={()=>{setCelebrated(null);setChildView("home");}} style={{background:"linear-gradient(135deg,#FF6B35,#FF8E53)",color:"#fff",padding:"14px 36px",fontSize:16}}>🏠 Back to Home</button>
-              </div>;
+              const confettiColors = ["#FF6B35","#4776E6","#27AE60","#F4D03F","#EC4899","#8E54E9","#06B6D4"];
+              return <>
+                {/* Confetti */}
+                <div className="confetti-container">
+                  {Array.from({length:30}).map((_,i)=>(
+                    <div key={i} className="confetti-piece" style={{
+                      left:`${Math.random()*100}%`,
+                      background:confettiColors[i%confettiColors.length],
+                      width:Math.random()*8+6,height:Math.random()*8+6,
+                      borderRadius:Math.random()>0.5?"50%":"2px",
+                      animationDuration:`${Math.random()*2+2}s`,
+                      animationDelay:`${Math.random()*1.5}s`,
+                    }}/>
+                  ))}
+                </div>
+                <div className="celebrate-screen pop">
+                  {child&&<div style={{display:"flex",justifyContent:"center",marginBottom:12}}><Avatar child={child} size={64} ring/></div>}
+                  <div className="celebrate-emoji float">🎉</div>
+                  <div className="celebrate-msg">{child?.name}, awesome reading!</div>
+                  <div className="celebrate-detail" style={{marginBottom:celebrated.adjusted?8:20}}>{celebrated.bookTitle} — {celebrated.pages} pages approved!</div>
+                  {celebrated.adjusted&&<div style={{fontSize:12,color:"#F59E0B",marginBottom:16,fontWeight:700}}>⚡ Adjusted from {celebrated.originalPages} pages</div>}
+                  <div className="celebrate-reward-box pulse" style={{background:r.color+"20",border:`2px solid ${r.color}40`}}>
+                    <div className="celebrate-reward-icon">{r.icon}</div>
+                    <div className="celebrate-reward-pts" style={{color:r.color}}>{pts}</div>
+                    <div className="celebrate-reward-label">{r.unit==="p"?"pence earned":`${r.unit} of ${r.label}`}</div>
+                  </div><br/>
+                  <button className="btn btn-primary btn-orange" onClick={()=>{setCelebrated(null);setChildView("home");}} style={{padding:"14px 36px",fontSize:16}}>🏠 Back to Home</button>
+                </div>
+              </>;
             })()}
 
             {/* STATS */}
@@ -1875,16 +1904,16 @@ export default function App() {
               }).length;
               const sessionDiff = thisWeekSessions - lastWeekSessions;
 
-              return <div className="pop">
-                <button className="btn" onClick={() => setChildView("home")} style={{ background: "rgba(255,255,255,0.1)", color: "#fff", padding: "7px 14px", marginBottom: 16, fontSize: 14 }}>← Back</button>
+              return <div className="slide-up">
+                <button className="btn btn-ghost" onClick={() => setChildView("home")} style={{marginBottom:16}}>← Back</button>
                 <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 18 }}>📊 My Reading Stats</div>
 
                 {/* Streak */}
                 <div className="card" style={{ padding: 18, marginBottom: 14, textAlign: "center", background: streak > 0 ? "linear-gradient(135deg,rgba(255,107,53,0.15),rgba(255,142,83,0.1))" : undefined, border: streak > 0 ? "1px solid rgba(255,107,53,0.3)" : undefined }}>
                   <div style={{ fontSize: 48 }}>{streak > 0 ? "🔥" : "💤"}</div>
-                  <div style={{ fontSize: 36, fontWeight: 900, color: streak > 0 ? "#FF6B35" : "rgba(255,255,255,0.3)", marginTop: 4 }}>{streak}</div>
+                  <div className={streak > 0 ? "streak-glow" : ""} style={{ fontSize: 36, fontWeight: 900, color: streak > 0 ? "#FF6B35" : "rgba(255,255,255,0.3)", marginTop: 4 }}>{streak}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>day streak</div>
-                  {longestStreak > streak && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>Best: {longestStreak} days</div>}
+                  {longestStreak > streak && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>🏆 Best: {longestStreak} days</div>}
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>Read 20+ pages daily to keep it going!</div>
                 </div>
 

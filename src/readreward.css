@@ -54,9 +54,58 @@ input, button { font-family: 'Calibri', 'Candara', 'Segoe UI', sans-serif; }
 @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
 @keyframes pop { 0% { transform: scale(0.5); opacity: 0 } 80% { transform: scale(1.08) } 100% { transform: scale(1); opacity: 1 } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(24px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes confetti-fall {
+  0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes streakGlow {
+  0%,100% { text-shadow: 0 0 8px rgba(255,107,53,0.3); }
+  50% { text-shadow: 0 0 20px rgba(255,107,53,0.6), 0 0 40px rgba(255,107,53,0.3); }
+}
 .pop { animation: pop 0.35s ease forwards; }
 .fade { animation: fadeIn 0.3s ease forwards; }
 .float { animation: float 3s ease-in-out infinite; }
+.slide-up { animation: slideUp 0.4s ease forwards; }
+.pulse { animation: pulse 2s ease-in-out infinite; }
+.streak-glow { animation: streakGlow 2s ease-in-out infinite; }
+
+/* ── Confetti ── */
+.confetti-container { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+.confetti-piece {
+  position: absolute;
+  width: 10px; height: 10px;
+  top: -20px;
+  animation: confetti-fall linear forwards;
+}
+
+/* ── Celebrate Screen Polish ── */
+.celebrate-screen { text-align: center; padding: 24px 10px; }
+.celebrate-emoji { font-size: 76px; margin-bottom: 8px; }
+.celebrate-msg { font-size: 26px; font-weight: 900; margin: 12px 0 8px; }
+.celebrate-detail { font-size: 14px; color: rgba(255,255,255,0.5); }
+.celebrate-reward-box { border-radius: 22px; padding: 26px 34px; margin: 20px auto; display: inline-block; }
+.celebrate-reward-icon { font-size: 50px; }
+.celebrate-reward-pts { font-size: 42px; font-weight: 900; }
+.celebrate-reward-label { font-size: 15px; color: rgba(255,255,255,0.6); }
+
+/* ── First-time Empty States ── */
+.empty-state { padding: 36px 20px; text-align: center; }
+.empty-state-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state-title { font-size: 18px; font-weight: 900; margin-bottom: 6px; }
+.empty-state-body { font-size: 13px; color: rgba(255,255,255,0.4); line-height: 1.6; margin-bottom: 16px; }
+
+/* ── Tap target sizing (min 44px for accessibility) ── */
+.tap-target { min-height: 44px; min-width: 44px; display: flex; align-items: center; justify-content: center; }
+
+/* ── Accessibility ── */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
+.focus-visible:focus-visible { outline: 2px solid #4776E6; outline-offset: 2px; }
+
+/* ── Child home greeting ── */
+.greeting-card { padding: 16px; margin-bottom: 14px; background: linear-gradient(135deg, rgba(71,118,230,0.12), rgba(142,84,233,0.08)); border: 1px solid rgba(71,118,230,0.2); }
 
 /* ── Landing Screen ── */
 .landing { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 0 24px; text-align: center; }
