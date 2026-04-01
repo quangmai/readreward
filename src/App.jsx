@@ -874,6 +874,8 @@ export default function App() {
   const [pushPermission, setPushPermission] = useState('default'); // 'default'|'granted'|'denied'|'unsupported'
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [notifPrefs, setNotifPrefs] = useState({ reading_logs: true, redemptions: true });
+  const [toast, setToast] = useState(null); // {message, type:'error'|'success'|'info'}
+  const [pinAttempts, setPinAttempts] = useState({}); // {childId: {count, lockedUntil}}
 
   /* ── mode inside app ── */
   // mode: "child" | "parent"
@@ -982,6 +984,11 @@ export default function App() {
     // authUser is already set, so the effect will load data + navigate to dashboard
   }
 
+  function showToast(message, type="error") {
+    setToast({message, type});
+    setTimeout(()=>setToast(null), 4000);
+  }
+
   async function handleLogout() {
     await logOut();
     setParentAccount(null);
@@ -1019,11 +1026,30 @@ export default function App() {
 
   async function submitChildPin() {
     if(childPinInput.length<4) return setChildPinError("Enter your 4-digit PIN");
+    // Rate limiting: 5 attempts, 15 min lockout
+    const attempts = pinAttempts[activeChildId] || { count: 0, lockedUntil: 0 };
+    if (attempts.lockedUntil > Date.now()) {
+      const minsLeft = Math.ceil((attempts.lockedUntil - Date.now()) / 60000);
+      return setChildPinError(`Too many wrong attempts. Try again in ${minsLeft} minute${minsLeft>1?"s":""}.`);
+    }
     setAuthLoading(true);
     const { valid, error } = await verifyChildPin(activeChildId, childPinInput);
     setAuthLoading(false);
     if(error) { setChildPinError("Something went wrong, try again"); return; }
-    if(!valid) { setChildPinError("Wrong PIN, try again"); setChildPinInput(""); return; }
+    if(!valid) {
+      const newCount = attempts.count + 1;
+      if (newCount >= 5) {
+        setPinAttempts(p => ({...p, [activeChildId]: { count: 0, lockedUntil: Date.now() + 15*60*1000 }}));
+        setChildPinError("Too many wrong attempts. Locked for 15 minutes.");
+      } else {
+        setPinAttempts(p => ({...p, [activeChildId]: { count: newCount, lockedUntil: 0 }}));
+        setChildPinError(`Wrong PIN (${5-newCount} attempts left)`);
+      }
+      setChildPinInput("");
+      return;
+    }
+    // Success — reset attempts
+    setPinAttempts(p => ({...p, [activeChildId]: { count: 0, lockedUntil: 0 }}));
     setChildPinError(""); setChildPickMode(false);
     setMode("child"); setChildView("home");
   }
@@ -1037,18 +1063,26 @@ export default function App() {
   ══════════════════════════════════════════════ */
   function handleCoverPick(e) {
     const f=e.target.files?.[0]; if(!f) return;
+    // File size limit: 5MB
+    if (f.size > 5 * 1024 * 1024) { showToast("Image too large — max 5MB"); return; }
+    if (!f.type.startsWith("image/")) { showToast("Please select an image file"); return; }
     const r=new FileReader();
     r.onload=ev=>setAddBookForm(form=>({...form,cover:ev.target.result,coverFile:f}));
     r.readAsDataURL(f);
   }
   async function submitAddBook() {
-    if(!addBookForm.title.trim()||!addBookForm.totalPages) return;
+    if(!addBookForm.title.trim()) return showToast("Book title is required");
+    if(!addBookForm.totalPages) return showToast("Total pages is required");
+    const totalPages = parseInt(addBookForm.totalPages);
+    if(isNaN(totalPages) || totalPages < 1) return showToast("Pages must be at least 1");
+    if(totalPages > 9999) return showToast("Pages can't exceed 9,999");
     setAuthLoading(true);
 
     // Upload cover image if provided
     let coverUrl = null;
     if (addBookForm.coverFile) {
       const { url, error: uploadErr } = await uploadCover(addBookForm.coverFile, activeChildId);
+      if (uploadErr) showToast("Cover upload failed — book saved without cover");
       if (!uploadErr && url) coverUrl = url;
     }
 
@@ -1057,11 +1091,11 @@ export default function App() {
       title: addBookForm.title.trim(),
       authors: addBookForm.authors.trim(),
       coverUrl,
-      totalPages: parseInt(addBookForm.totalPages),
+      totalPages,
       difficulty: addBookForm.difficulty,
     });
     setAuthLoading(false);
-    if(error) return;
+    if(error) return showToast("Failed to add book — " + (error.message || "try again"));
     setBooks(p=>[...p,{
       id: newBook.id, childId: newBook.child_id,
       title: newBook.title, authors: newBook.authors,
@@ -1070,10 +1104,18 @@ export default function App() {
       difficulty: newBook.difficulty, done: false,
     }]);
     setAddBookForm(EMPTY_BOOK); setChildView("home");
+    showToast("📚 Book added!", "success");
   }
   async function submitLog() {
     if(!logForm.pages||!logForm.book) return;
     const pages = parseInt(logForm.pages);
+    if(isNaN(pages) || pages < 1) return showToast("Enter at least 1 page");
+    if(pages > 9999) return showToast("Pages can't exceed 9,999");
+    // Warn if logging more pages than remaining
+    const remaining = logForm.book.totalPages - logForm.book.pagesRead;
+    if(pages > remaining && remaining > 0) {
+      // Allow it but it's fine — they might re-read
+    }
     setAuthLoading(true);
     const { data: newLog, error } = await addLogToDb({
       childId: activeChildId,
@@ -1084,7 +1126,7 @@ export default function App() {
       rewardTypeId: logForm.reward,
     });
     setAuthLoading(false);
-    if(error) return; // TODO: show error
+    if(error) return showToast("Failed to submit — " + (error.message || "try again"));
     // Update book pages in Supabase
     const updatedPages = logForm.book.pagesRead + pages;
     await updateBookInDb(logForm.book.id, { pages_read: updatedPages });
@@ -1127,7 +1169,7 @@ export default function App() {
     setAuthLoading(true);
     const { data: updated, error } = await approveLogInDb(id, overridePages!=null ? overridePages : null);
     setAuthLoading(false);
-    if(error) return;
+    if(error) return showToast("Failed to approve — " + (error.message || "try again"));
     // Update local state
     const finalPages = overridePages != null ? overridePages : log.pages;
     const finalLog = {
@@ -1146,11 +1188,11 @@ export default function App() {
     setAuthLoading(true);
     const { error } = await rejectLogInDb(id);
     setAuthLoading(false);
-    if(error) return;
+    if(error) return showToast("Failed to reject — " + (error.message || "try again"));
     setLogs(p=>p.map(l=>l.id===id?{...l,status:"rejected"}:l));
   }
   async function submitRedemption(reward, tier) {
-    if(balance[reward.id] < tier.amount) return;
+    if(balance[reward.id] < tier.amount) return showToast("Not enough balance");
     setAuthLoading(true);
     const status = reward.autoApprove ? "approved" : "pending";
     const childName = children.find(c=>c.id===activeChildId)?.name || "Your child";
@@ -1162,7 +1204,7 @@ export default function App() {
       status,
     });
     setAuthLoading(false);
-    if(error) return;
+    if(error) return showToast("Failed to redeem — " + (error.message || "try again"));
     setRedemptions(p=>[{
       id: newR.id, childId: newR.child_id, rewardTypeId: newR.reward_type_id,
       amount: Number(newR.amount), tierLabel: newR.tier_label,
@@ -1170,6 +1212,7 @@ export default function App() {
     },...p]);
     setRedeemReward(null);
     setChildView("home");
+    showToast(status==="approved" ? "🎁 Redeemed!" : "🎁 Sent for approval!", "success");
     // Notify parent if pending (not auto-approved) and preference enabled
     if (status === "pending" && parentAccount?.id && notifPrefs.redemptions) {
       sendPushNotification({
@@ -1184,14 +1227,14 @@ export default function App() {
     setAuthLoading(true);
     const { error } = await approveRedemptionInDb(id);
     setAuthLoading(false);
-    if(error) return;
+    if(error) return showToast("Failed to approve — " + (error.message || "try again"));
     setRedemptions(p=>p.map(r=>r.id===id?{...r,status:"approved"}:r));
   }
   async function rejectRedemption(id) {
     setAuthLoading(true);
     const { error } = await rejectRedemptionInDb(id);
     setAuthLoading(false);
-    if(error) return;
+    if(error) return showToast("Failed to reject — " + (error.message || "try again"));
     setRedemptions(p=>p.map(r=>r.id===id?{...r,status:"rejected"}:r));
   }
 
@@ -2423,6 +2466,11 @@ export default function App() {
           </>
         )}
       </div>
+
+      {/* TOAST NOTIFICATION */}
+      {toast && (
+        <div className={`toast toast-${toast.type||"error"}`}>{toast.message}</div>
+      )}
 
       {/* NEW BADGE POPUP */}
       {newBadge && (
