@@ -108,6 +108,49 @@ function makeAvatarSvg(name="",colorIdx=0) {
 function Badge({color,children}) {
   return <span className="badge" style={{background:color+"22",color,border:`1px solid ${color}44`}}>{children}</span>;
 }
+function LoadingSkeleton() {
+  return <div className="fade">
+    {/* Shelf header skeleton */}
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+      <div className="skeleton skeleton-circle" style={{width:44,height:44}}/>
+      <div style={{flex:1}}><div className="skeleton skeleton-text" style={{width:"50%"}}/><div className="skeleton skeleton-text-sm"/></div>
+    </div>
+    {/* Reward bank skeleton */}
+    <div className="card" style={{padding:14,marginBottom:14}}>
+      <div className="skeleton skeleton-text-sm" style={{width:"40%",marginBottom:12}}/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+        <div className="skeleton skeleton-pill"/><div className="skeleton skeleton-pill"/><div className="skeleton skeleton-pill"/>
+      </div>
+    </div>
+    {/* Book slots skeleton */}
+    <div className="card" style={{padding:14,marginBottom:14}}>
+      <div className="skeleton skeleton-text-sm" style={{width:"50%",marginBottom:12}}/>
+      <div style={{display:"flex",gap:8}}>
+        <div className="skeleton" style={{flex:1,height:200,borderRadius:16}}/><div className="skeleton" style={{flex:1,height:200,borderRadius:16}}/><div className="skeleton" style={{flex:1,height:200,borderRadius:16}}/>
+      </div>
+    </div>
+    {/* Activity skeleton */}
+    <div className="skeleton skeleton-text-sm" style={{width:"30%",marginBottom:10}}/>
+    <div className="card skeleton-card"><div className="skeleton-row"><div className="skeleton skeleton-circle" style={{width:24,height:24}}/><div style={{flex:1}}><div className="skeleton skeleton-text"/><div className="skeleton skeleton-text-sm"/></div></div></div>
+    <div className="card skeleton-card"><div className="skeleton-row"><div className="skeleton skeleton-circle" style={{width:24,height:24}}/><div style={{flex:1}}><div className="skeleton skeleton-text"/><div className="skeleton skeleton-text-sm"/></div></div></div>
+  </div>;
+}
+function DashboardSkeleton() {
+  return <div className="fade">
+    <div className="skeleton skeleton-bar" style={{width:"55%",marginBottom:16}}/>
+    {/* Family stats skeleton */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+      <div className="card skeleton" style={{height:60}}/><div className="card skeleton" style={{height:60}}/><div className="card skeleton" style={{height:60}}/>
+    </div>
+    {/* Child cards skeleton */}
+    <div className="skeleton skeleton-text-sm" style={{width:"35%",marginBottom:10}}/>
+    <div className="card skeleton-card" style={{height:100,marginBottom:10}}/>
+    <div className="card skeleton-card" style={{height:100,marginBottom:10}}/>
+    {/* Pending skeleton */}
+    <div className="skeleton skeleton-text-sm" style={{width:"40%",marginBottom:10}}/>
+    <div className="card skeleton-card" style={{height:80}}/>
+  </div>;
+}
 function Avatar({child,size=40,ring=false}) {
   // avatar can be: a character key (e.g. "hoodie_boy"), a URL, or null
   const charAvatar = AVATAR_CHARACTERS.find(a=>a.id===child.avatar);
@@ -673,6 +716,7 @@ export default function App() {
   const [screen, setScreen]           = useState("loading");
   const [parentAccount, setParentAccount] = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true); // true until loadParentData completes
 
   /* ── exchange rate config (editable by parent) ── */
   const [rewards, setRewards]           = useState(DEFAULT_REWARDS);
@@ -722,7 +766,7 @@ export default function App() {
     async function load() {
       try {
         await loadParentData(authUser);
-        if (!cancelled) { setScreen("app"); setMode("parent"); setParentView("dashboard"); }
+        if (!cancelled) { setDataLoading(false); setScreen("app"); setMode("parent"); setParentView("dashboard"); }
       } catch (err) {
         console.error("Load data error:", err);
         if (!cancelled) setScreen("landing");
@@ -1585,7 +1629,7 @@ export default function App() {
           <>
             {/* HOME */}
             {childView==="home" && (
-              <>
+              dataLoading ? <LoadingSkeleton/> : <>
                 <div className="child-shelf-header">
                   <Avatar child={activeChild} size={44} ring/>
                   <div>
@@ -2048,8 +2092,11 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Skeleton while data loading */}
+                {dataLoading && <DashboardSkeleton/>}
+
                 {/* ── ONBOARDING: no children yet ── */}
-                {myChildren.length===0 && (
+                {!dataLoading && myChildren.length===0 && (
                   <div style={{marginBottom:20}}>
                     {/* Welcome banner */}
                     <div className="card" style={{padding:22,marginBottom:16,background:"linear-gradient(135deg,rgba(71,118,230,0.2),rgba(142,84,233,0.2))",border:"1px solid rgba(71,118,230,0.35)",textAlign:"center"}}>
@@ -2100,7 +2147,7 @@ export default function App() {
                 )}
 
                 {/* ── NORMAL STATE: has children ── */}
-                {myChildren.length>0 && (()=>{
+                {!dataLoading && myChildren.length>0 && (()=>{
                   const now = new Date();
                   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                   const ONE_DAY = 86400000;
@@ -2196,7 +2243,7 @@ export default function App() {
                 })()}
 
                 {/* pending logs for populated accounts */}
-                {myChildren.length>0 && pendingLogs.map(log=>{
+                {!dataLoading && myChildren.length>0 && pendingLogs.map(log=>{
                   const child=children.find(c=>c.id===log.childId);
                   const book=books.find(b=>b.childId===log.childId&&b.title===log.bookTitle);
                   const r=rewards.find(r=>r.id===log.reward) || {id:log.reward,label:"Reward",icon:"🎯",unit:"mins",rate:1,color:"#888"};
@@ -2245,7 +2292,7 @@ export default function App() {
                 })}
 
                 {/* Pending redemptions */}
-                {myChildren.length>0 && pendingRedemptions.map(rd=>{
+                {!dataLoading && myChildren.length>0 && pendingRedemptions.map(rd=>{
                   const child=children.find(c=>c.id===rd.childId);
                   const r=rewards.find(r=>r.id===rd.rewardTypeId) || {id:"?",label:"Reward",icon:"🎯",unit:"mins",rate:1,color:"#888"};
                   const [ac]=child?AVATAR_COLORS[child.colorIdx||0]:["#888","#aaa"];

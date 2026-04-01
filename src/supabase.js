@@ -435,12 +435,56 @@ export async function addAchievement({ childId, badgeKey }) {
 // FILE UPLOADS (covers & avatars)
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// IMAGE COMPRESSION
+// ─────────────────────────────────────────────
+
+/** Compress an image file to max dimensions and JPEG quality */
+async function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+  return new Promise((resolve) => {
+    // If already small enough, return as-is
+    if (file.size < 100 * 1024) { resolve(file); return; }
+
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    img.onload = () => {
+      let { width, height } = img;
+      // Scale down if needed
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (blob && blob.size < file.size) {
+          resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
+        } else {
+          resolve(file); // compression didn't help, keep original
+        }
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => resolve(file); // fallback to original
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+
+// ─────────────────────────────────────────────
+// FILE UPLOADS (covers & avatars) — with compression
+// ─────────────────────────────────────────────
+
 export async function uploadCover(file, childId) {
-  const ext = file.name.split('.').pop();
+  const compressed = await compressImage(file, 600, 900, 0.75);
+  const ext = compressed.name.split('.').pop();
   const path = `${childId}/${Date.now()}.${ext}`;
   const { data, error } = await supabase.storage
     .from('covers')
-    .upload(path, file, { upsert: true });
+    .upload(path, compressed, { upsert: true });
   if (error) return { url: null, error };
   const { data: { publicUrl } } = supabase.storage
     .from('covers')
@@ -449,11 +493,12 @@ export async function uploadCover(file, childId) {
 }
 
 export async function uploadAvatar(file, childId) {
-  const ext = file.name.split('.').pop();
+  const compressed = await compressImage(file, 200, 200, 0.8);
+  const ext = compressed.name.split('.').pop();
   const path = `${childId}/${Date.now()}.${ext}`;
   const { data, error } = await supabase.storage
     .from('avatars')
-    .upload(path, file, { upsert: true });
+    .upload(path, compressed, { upsert: true });
   if (error) return { url: null, error };
   const { data: { publicUrl } } = supabase.storage
     .from('avatars')

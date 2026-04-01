@@ -636,3 +636,13 @@ input, button { font-family: 'Calibri', 'Candara', 'Segoe UI', sans-serif; }
 .toast-success { background: #27AE60; color: #fff; }
 .toast-info { background: #4776E6; color: #fff; }
 @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ── Skeleton Loading ── */
+.skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 10px; }
+.skeleton-text { height: 14px; margin-bottom: 8px; }
+.skeleton-text-sm { height: 10px; margin-bottom: 6px; width: 60%; }
+.skeleton-circle { border-radius: 50%; }
+.skeleton-card { padding: 16px; margin-bottom: 12px; }
+.skeleton-bar { height: 24px; border-radius: 8px; margin-bottom: 10px; }
+.skeleton-row { display: flex; gap: 10px; align-items: center; }
+.skeleton-pill { height: 60px; border-radius: 16px; }
