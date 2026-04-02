@@ -158,8 +158,14 @@ function Avatar({child,size=40,ring=false}) {
   const src = charAvatar ? charAvatar.src : (child.avatar || makeAvatarSvg(child.name, child.colorIdx||0));
   return <div style={{width:size,height:size,borderRadius:"50%",overflow:"hidden",flexShrink:0,border:ring?`2px solid ${AVATAR_COLORS[child.colorIdx||0][0]}`:"2px solid rgba(255,255,255,0.15)"}}><img src={src} alt={child.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>;
 }
-function RewardPill({reward,earned}) {
-  return <div className="reward-pill" style={{background:reward.color+"15",border:`1.5px solid ${reward.color}33`}}><span className="reward-pill-icon">{reward.icon}</span><div style={{minWidth:0}}><div className="reward-pill-label">{reward.label.toUpperCase()}</div><div className="reward-pill-value" style={{color:reward.color}}>{earned}{reward.unit==="p"?"p":` ${reward.unit}`}</div></div></div>;
+function RewardPill({reward,earned,retired}) {
+  return <div className="reward-pill" style={{background:reward.color+"15",border:`1.5px solid ${reward.color}33`,opacity:retired?0.7:1}}>
+    <span className="reward-pill-icon">{reward.icon}</span>
+    <div style={{minWidth:0,flex:1}}>
+      <div className="reward-pill-label">{reward.label.toUpperCase()}{retired?" · RETIRED":""}</div>
+      <div className="reward-pill-value" style={{color:reward.color}}>{earned}{reward.unit==="p"?"p":` ${reward.unit}`}</div>
+    </div>
+  </div>;
 }
 function BookSlot({book,onMarkDone,onLogReading}) {
   if(!book) return <div className="book-slot-empty"><div style={{fontSize:28}}>＋</div><div>Empty slot</div></div>;
@@ -1763,9 +1769,8 @@ export default function App() {
                 </div>
                 <div className="card pop reward-bank">
                   <div className="slabel">YOUR REWARD BANK</div>
-                  <div className="reward-grid">{rewards.filter(r=>!r.retired || balance[r.id]>0).map(r=><div key={r.id} onClick={()=>balance[r.id]>0&&setRedeemReward(r)} style={{cursor:balance[r.id]>0?"pointer":"default",position:"relative"}}>
-                    <RewardPill reward={r} earned={balance[r.id]}/>
-                    {r.retired&&<div style={{position:"absolute",top:4,right:4,background:"rgba(255,255,255,0.15)",borderRadius:6,padding:"1px 5px",fontSize:8,color:"rgba(255,255,255,0.5)",fontWeight:700}}>RETIRED</div>}
+                  <div className="reward-grid">{rewards.filter(r=>!r.retired || balance[r.id]>0).map(r=><div key={r.id} onClick={()=>balance[r.id]>0&&setRedeemReward(r)} style={{cursor:balance[r.id]>0?"pointer":"default"}}>
+                    <RewardPill reward={r} earned={balance[r.id]} retired={r.retired}/>
                   </div>)}</div>
                   {rewards.some(r=>balance[r.id]>0&&(!r.retired))&&<div className="reward-tap-hint">Tap a reward to spend it!</div>}
                 </div>
