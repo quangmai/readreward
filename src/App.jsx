@@ -1861,37 +1861,37 @@ export default function App() {
           <>
             {/* HOME */}
             {childView==="home" && (
-              dataLoading ? <LoadingSkeleton/> : (
-                (myBooks.length===0 && myLogs.length===0) ? (
-                  <div className="slide-up" style={{textAlign:"center",padding:"10px 0 20px"}}>
-                    <Avatar child={activeChild} size={64} ring/>
-                    <div style={{fontSize:24,fontWeight:900,margin:"12px 0 4px"}}>Welcome, {activeChild.name}! 🎉</div>
-                    <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24,lineHeight:1.6}}>Ready to earn rewards for reading? Let's get started!</div>
+              dataLoading ? <LoadingSkeleton/> :
+              (myBooks.length===0 && myLogs.length===0) ? (
+                <div className="slide-up" style={{textAlign:"center",padding:"10px 0 20px"}}>
+                  <Avatar child={activeChild} size={64} ring/>
+                  <div style={{fontSize:24,fontWeight:900,margin:"12px 0 4px"}}>Welcome, {activeChild.name}! 🎉</div>
+                  <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24,lineHeight:1.6}}>Ready to earn rewards for reading? Let's get started!</div>
 
-                    <div className="card" style={{padding:18,marginBottom:14,textAlign:"left"}}>
-                      <div style={{fontWeight:800,fontSize:15,marginBottom:14}}>How it works:</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                          <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#4776E6,#8E54E9)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>1</div>
-                          <div><div style={{fontWeight:700,fontSize:13}}>Add a book you're reading</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Type the title, author, and how many pages it has</div></div>
-                        </div>
-                        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                          <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#FF6B35,#FF8E53)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>2</div>
-                          <div><div style={{fontWeight:700,fontSize:13}}>Log your reading sessions</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>After reading, tap "Log pages" and enter how many pages you read</div></div>
-                        </div>
-                        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                          <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#27AE60,#2ECC71)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>3</div>
-                          <div><div style={{fontWeight:700,fontSize:13}}>Earn rewards!</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Your parent approves and you earn {rewards.find(r=>!r.retired)?.icon||"🎮"} {rewards.find(r=>!r.retired)?.label||"rewards"}!</div></div>
-                        </div>
+                  <div className="card" style={{padding:18,marginBottom:14,textAlign:"left"}}>
+                    <div style={{fontWeight:800,fontSize:15,marginBottom:14}}>How it works:</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#4776E6,#8E54E9)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>1</div>
+                        <div><div style={{fontWeight:700,fontSize:13}}>Add a book you're reading</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Type the title, author, and how many pages it has</div></div>
+                      </div>
+                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#FF6B35,#FF8E53)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>2</div>
+                        <div><div style={{fontWeight:700,fontSize:13}}>Log your reading sessions</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>After reading, tap "Log pages" and enter how many pages you read</div></div>
+                      </div>
+                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#27AE60,#2ECC71)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>3</div>
+                        <div><div style={{fontWeight:700,fontSize:13}}>Earn rewards!</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Your parent approves and you earn {rewards.find(r=>!r.retired)?.icon||"🎮"} {rewards.find(r=>!r.retired)?.label||"rewards"}!</div></div>
                       </div>
                     </div>
-
-                    <button className="btn btn-primary btn-orange" onClick={()=>setChildView("addBook")} style={{width:"100%",padding:"15px 0",fontSize:16}}>
-                      📖 Add Your First Book →
-                    </button>
                   </div>
-                ) : (
-                  <div>
+
+                  <button className="btn btn-primary btn-orange" onClick={()=>setChildView("addBook")} style={{width:"100%",padding:"15px 0",fontSize:16}}>
+                    📖 Add Your First Book →
+                  </button>
+                </div>
+              ) : (
+                <div>
                 <div className="child-shelf-header">
                   <Avatar child={activeChild} size={44} ring/>
                   <div>
@@ -2068,7 +2068,8 @@ export default function App() {
                     <div className="empty-state-body">Add a book and start logging pages to see your activity here. Every session you log earns rewards!</div>
                   </div>;
                 })()}
-              </div>)
+              </div>
+              )
             )}
 
             {/* ADD BOOK */}
