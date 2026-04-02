@@ -1449,6 +1449,7 @@ export default function App() {
 
     if(dbErr) return setAddChildForm(f=>({...f,error:dbErr.message}));
 
+    const isFirstChild = children.length === 0;
     setChildren(p=>[...p,{
       id: newChild.id, parentId: newChild.parent_id,
       name: newChild.name, username: newChild.username,
@@ -1456,12 +1457,7 @@ export default function App() {
       avatar: newChild.avatar_url,
     }]);
     setAddChildForm(EMPTY_CHILD_FORM);
-    // If this was the first child, show the share screen
-    if (children.length === 0) {
-      setParentView("shareWithChild");
-    } else {
-      setParentView("dashboard");
-    }
+    setParentView("shareWithChild");
     showToast(`👧 ${name.trim()} added!`, "success");
   }
   async function saveChildPin() {
