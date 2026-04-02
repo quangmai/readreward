@@ -1861,9 +1861,8 @@ export default function App() {
           <>
             {/* HOME */}
             {childView==="home" && (
-              dataLoading ? <LoadingSkeleton/> : <div>
-                {/* First-time child welcome */}
-                {myBooks.length===0 && myLogs.length===0 ? (
+              dataLoading ? <LoadingSkeleton/> : (
+                (myBooks.length===0 && myLogs.length===0) ? (
                   <div className="slide-up" style={{textAlign:"center",padding:"10px 0 20px"}}>
                     <Avatar child={activeChild} size={64} ring/>
                     <div style={{fontSize:24,fontWeight:900,margin:"12px 0 4px"}}>Welcome, {activeChild.name}! 🎉</div>
@@ -1891,9 +1890,8 @@ export default function App() {
                       📖 Add Your First Book →
                     </button>
                   </div>
-                ) : <>
-                {/* Normal child home */}
-                <div className="child-shelf-header">
+                ) : (
+                  <div>
                   <Avatar child={activeChild} size={44} ring/>
                   <div>
                     <div className="child-shelf-name">{activeChild.name}'s shelf</div>
@@ -2069,7 +2067,7 @@ export default function App() {
                     <div className="empty-state-body">Add a book and start logging pages to see your activity here. Every session you log earns rewards!</div>
                   </div>;
                 })()}
-              </div></>
+              </div>)
             )}
 
             {/* ADD BOOK */}
