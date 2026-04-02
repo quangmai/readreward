@@ -1,31 +1,19 @@
 /* ReadReward — Service Worker (PWA + Push) */
 
-var CACHE_NAME = 'readreward-v1';
-var SHELL_URLS = [
-  '/',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/manifest.json'
-];
+var CACHE_NAME = 'readreward-v2';
 
-/* ── Install: cache app shell ── */
-self.addEventListener('install', function(event) {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(SHELL_URLS);
-    }).then(function() {
-      return self.skipWaiting();
-    })
-  );
+/* ── Install: instant — no blocking cache ── */
+self.addEventListener('install', function() {
+  self.skipWaiting();
 });
 
-/* ── Activate: clean old caches ── */
+/* ── Activate: claim clients immediately, clean old caches ── */
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(names) {
       return Promise.all(
-        names.filter(function(name) { return name !== CACHE_NAME; })
-             .map(function(name) { return caches.delete(name); })
+        names.filter(function(n) { return n !== CACHE_NAME; })
+             .map(function(n) { return caches.delete(n); })
       );
     }).then(function() {
       return clients.claim();
@@ -33,42 +21,39 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-/* ── Fetch: network-first for API, cache-first for shell ── */
+/* ── Fetch: stale-while-revalidate for speed ── */
 self.addEventListener('fetch', function(event) {
   var url = new URL(event.request.url);
 
-  // Skip non-GET and cross-origin API calls
+  // Skip non-GET, cross-origin, and Supabase API calls
   if (event.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
 
-  // For navigation requests (HTML pages), try network first, fallback to cache
+  // Navigation: network first, cache fallback (for offline)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).then(function(response) {
-        // Cache the latest version
         var clone = response.clone();
-        caches.open(CACHE_NAME).then(function(cache) {
-          cache.put(event.request, clone);
-        });
+        caches.open(CACHE_NAME).then(function(c) { c.put(event.request, clone); });
         return response;
       }).catch(function() {
-        return caches.match('/') || caches.match(event.request);
+        return caches.match('/');
       })
     );
     return;
   }
 
-  // For static assets (JS, CSS, images), try cache first, then network
+  // Static assets: stale-while-revalidate
+  // Serve from cache immediately, fetch update in background
   if (url.pathname.match(/\.(js|css|png|jpg|svg|ico|woff2?)$/)) {
     event.respondWith(
-      caches.match(event.request).then(function(cached) {
-        if (cached) return cached;
-        return fetch(event.request).then(function(response) {
-          var clone = response.clone();
-          caches.open(CACHE_NAME).then(function(cache) {
-            cache.put(event.request, clone);
-          });
-          return response;
+      caches.open(CACHE_NAME).then(function(cache) {
+        return cache.match(event.request).then(function(cached) {
+          var fetched = fetch(event.request).then(function(response) {
+            cache.put(event.request, response.clone());
+            return response;
+          }).catch(function() { return cached; });
+          return cached || fetched;
         });
       })
     );
@@ -92,9 +77,7 @@ self.addEventListener('push', function(event) {
       try {
         var text = event.data.text();
         if (text) data.body = text;
-      } catch (e2) {
-        // use defaults
-      }
+      } catch (e2) {}
     }
   }
 
@@ -116,7 +99,7 @@ self.addEventListener('push', function(event) {
   );
 });
 
-/* ── Notification click → deep link ── */
+/* ── Notification click ── */
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   var url = (event.notification.data && event.notification.data.url) || '/';
