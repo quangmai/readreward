@@ -184,19 +184,14 @@ input, button { font-family: 'Calibri', 'Candara', 'Segoe UI', sans-serif; }
 .child-shelf-name { font-size: 18px; font-weight: 900; }
 .child-shelf-sub { font-size: 12px; color: rgba(255,255,255,0.4); }
 .reward-bank { padding: 14px; margin-bottom: 14px; }
-.reward-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.reward-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .reward-tap-hint { font-size: 11px; color: rgba(255,255,255,0.3); text-align: center; margin-top: 8px; }
 
 /* ── Reward Pill ── */
-.reward-pill { border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
+.reward-pill { border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .reward-pill-icon { font-size: 20px; flex-shrink: 0; }
-.reward-pill-label { font-size: 9px; color: #999; font-weight: 700; letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.reward-pill-value { font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* On wider screens, allow 3 columns */
-@media (min-width: 600px) {
-  .reward-grid { grid-template-columns: repeat(3, 1fr); }
-}
+.reward-pill-label { font-size: 9px; color: #999; font-weight: 700; letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reward-pill-value { font-size: 17px; font-weight: 800; }
 
 /* ── Book Slots ── */
 .book-slots { display: flex; gap: 8px; }
@@ -239,8 +234,7 @@ input, button { font-family: 'Calibri', 'Candara', 'Segoe UI', sans-serif; }
 .redeem-title { font-weight: 900; font-size: 16px; }
 .redeem-close { background: none; border: none; color: rgba(255,255,255,0.4); font-size: 18px; cursor: pointer; }
 .redeem-balance { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 12px; }
-.redeem-tiers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-@media (min-width: 600px) { .redeem-tiers { grid-template-columns: repeat(3, 1fr); } }
+.redeem-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .redeem-tier { padding: 16px 8px; }
 .redeem-tier-label { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
 .redeem-tier-amount { font-size: 22px; font-weight: 900; }
@@ -308,8 +302,7 @@ input, button { font-family: 'Calibri', 'Candara', 'Segoe UI', sans-serif; }
 
 /* ── Reward Picker (I want to earn) ── */
 .reward-picker { padding: 16px; margin-bottom: 18px; }
-.reward-picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-@media (min-width: 600px) { .reward-picker-grid { grid-template-columns: repeat(3, 1fr); } }
+.reward-picker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .reward-picker-btn { padding: 13px 6px; color: #fff; font-size: 12px; }
 .reward-picker-icon { font-size: 20px; }
 .reward-picker-label { font-weight: 800; margin-top: 3px; font-size: 11px; }

@@ -82,59 +82,6 @@ export async function updateParentProfile(updates) {
 
 
 // ─────────────────────────────────────────────
-// CHILD STANDALONE LOGIN (no parent auth needed)
-// ─────────────────────────────────────────────
-
-/** Login a child independently via family code + username + PIN */
-export async function childStandaloneLogin({ familyCode, childUsername, pin }) {
-  const { data, error } = await supabase.functions.invoke('child-login', {
-    body: { familyCode, childUsername, pin },
-  });
-  return { data, error };
-}
-
-/** Submit a reading log from child standalone session */
-export async function childSubmitLog({ childId, parentId, bookId, bookTitle, pages, difficulty, rewardTypeId }) {
-  const { data, error } = await supabase.functions.invoke('child-action', {
-    body: { action: 'submit_log', childId, parentId, bookId, bookTitle, pages, difficulty, rewardTypeId },
-  });
-  return { data, error };
-}
-
-/** Submit a redemption from child standalone session */
-export async function childSubmitRedemption({ childId, rewardTypeId, amount, tierLabel, status }) {
-  const { data, error } = await supabase.functions.invoke('child-action', {
-    body: { action: 'submit_redemption', childId, rewardTypeId, amount, tierLabel, status },
-  });
-  return { data, error };
-}
-
-/** Add a book from child standalone session */
-export async function childAddBook({ childId, title, authors, coverUrl, totalPages, difficulty }) {
-  const { data, error } = await supabase.functions.invoke('child-action', {
-    body: { action: 'add_book', childId, title, authors, coverUrl, totalPages, difficulty },
-  });
-  return { data, error };
-}
-
-/** Mark book done from child standalone session */
-export async function childMarkBookDone({ childId, bookId, totalPages }) {
-  const { data, error } = await supabase.functions.invoke('child-action', {
-    body: { action: 'mark_done', childId, bookId, totalPages },
-  });
-  return { data, error };
-}
-
-/** Update book pages from child standalone session */
-export async function childUpdateBookPages({ childId, bookId, pagesRead }) {
-  const { data, error } = await supabase.functions.invoke('child-action', {
-    body: { action: 'update_book_pages', childId, bookId, pagesRead },
-  });
-  return { data, error };
-}
-
-
-// ─────────────────────────────────────────────
 // CHILDREN
 // ─────────────────────────────────────────────
 
@@ -621,65 +568,6 @@ export async function rejectRedemption(id) {
     .select()
     .single();
   return { data, error };
-}
-
-
-// ─────────────────────────────────────────────
-// REALTIME SUBSCRIPTIONS
-// ─────────────────────────────────────────────
-
-/** Subscribe to changes on reading_logs, books, redemptions for a parent's children */
-export function subscribeToFamilyUpdates(childIds, callbacks) {
-  if (!childIds || childIds.length === 0) return null;
-
-  const channel = supabase.channel('family-updates')
-    // Reading logs — INSERT and UPDATE
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'reading_logs',
-      filter: `child_id=in.(${childIds.join(',')})`,
-    }, payload => callbacks.onNewLog?.(payload.new))
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'reading_logs',
-      filter: `child_id=in.(${childIds.join(',')})`,
-    }, payload => callbacks.onLogUpdated?.(payload.new))
-    // Books — INSERT and UPDATE
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'books',
-      filter: `child_id=in.(${childIds.join(',')})`,
-    }, payload => callbacks.onNewBook?.(payload.new))
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'books',
-      filter: `child_id=in.(${childIds.join(',')})`,
-    }, payload => callbacks.onBookUpdated?.(payload.new))
-    // Redemptions — INSERT and UPDATE
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'redemptions',
-      filter: `child_id=in.(${childIds.join(',')})`,
-    }, payload => callbacks.onNewRedemption?.(payload.new))
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'redemptions',
-      filter: `child_id=in.(${childIds.join(',')})`,
-    }, payload => callbacks.onRedemptionUpdated?.(payload.new))
-    .subscribe();
-
-  return channel;
-}
-
-/** Unsubscribe from family updates */
-export function unsubscribeFromFamilyUpdates(channel) {
-  if (channel) supabase.removeChannel(channel);
 }
 
 

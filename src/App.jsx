@@ -17,8 +17,6 @@ import {
   approveRedemption as approveRedemptionInDb, rejectRedemption as rejectRedemptionInDb,
   getAllAchievements, addAchievement as addAchievementToDb,
   subscribeToPush, savePushSubscription, getPushPermission, sendPushNotification,
-  subscribeToFamilyUpdates, unsubscribeFromFamilyUpdates,
-  childStandaloneLogin, childSubmitLog, childAddBook, childMarkBookDone, childUpdateBookPages, childSubmitRedemption,
 } from "./supabase";
 
 /* ─────────────────────────────────────────────
@@ -159,14 +157,8 @@ function Avatar({child,size=40,ring=false}) {
   const src = charAvatar ? charAvatar.src : (child.avatar || makeAvatarSvg(child.name, child.colorIdx||0));
   return <div style={{width:size,height:size,borderRadius:"50%",overflow:"hidden",flexShrink:0,border:ring?`2px solid ${AVATAR_COLORS[child.colorIdx||0][0]}`:"2px solid rgba(255,255,255,0.15)"}}><img src={src} alt={child.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>;
 }
-function RewardPill({reward,earned,retired}) {
-  return <div className="reward-pill" style={{background:reward.color+"15",border:`1.5px solid ${reward.color}33`,opacity:retired?0.7:1}}>
-    <span className="reward-pill-icon">{reward.icon}</span>
-    <div style={{minWidth:0,flex:1}}>
-      <div className="reward-pill-label">{reward.label.toUpperCase()}{retired?" · RETIRED":""}</div>
-      <div className="reward-pill-value" style={{color:reward.color}}>{earned}{reward.unit==="p"?"p":` ${reward.unit}`}</div>
-    </div>
-  </div>;
+function RewardPill({reward,earned}) {
+  return <div className="reward-pill" style={{background:reward.color+"15",border:`1.5px solid ${reward.color}33`}}><span className="reward-pill-icon">{reward.icon}</span><div style={{minWidth:0}}><div className="reward-pill-label">{reward.label.toUpperCase()}</div><div className="reward-pill-value" style={{color:reward.color}}>{earned}{reward.unit==="p"?"p":` ${reward.unit}`}</div></div></div>;
 }
 function BookSlot({book,onMarkDone,onLogReading}) {
   if(!book) return <div className="book-slot-empty"><div style={{fontSize:28}}>＋</div><div>Empty slot</div></div>;
@@ -303,8 +295,14 @@ function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDi
     }
   }
   function deleteReward(id) {
-    setRewards(prev => prev.filter(r => r.id!==id));
-    onDeleteReward?.(id);
+    // onDeleteReward returns true if fully deleted, false if retired
+    const fullyDeleted = onDeleteReward?.(id);
+    if (fullyDeleted) {
+      setRewards(prev => prev.filter(r => r.id!==id));
+    } else {
+      // Mark as retired locally
+      setRewards(prev => prev.map(r => r.id===id ? {...r, retired: true} : r));
+    }
     if(editingRewardId===id) setEditingRewardId(null);
   }
   function addReward() {
@@ -362,7 +360,7 @@ function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDi
             <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>Base rate: per 10 pages</div>
           </div>
 
-          {rewards.map(r=>{
+          {rewards.filter(r=>!r.retired).map(r=>{
             const isEditing = editingRewardId===r.id;
             const previewPts = calcPts(SAMPLE_PAGES,"medium",r.id,[r],diffBonuses);
             return (
@@ -784,79 +782,6 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authUser, passwordRecovery]);
 
-  /* ── Realtime subscriptions: update data when changes happen on other devices ── */
-  useEffect(() => {
-    // Only subscribe when we have children loaded
-    if (!children.length || !parentAccount) return;
-
-    const childIds = children.map(c => c.id);
-
-    // Clean up old subscription
-    if (realtimeChannelRef.current) {
-      unsubscribeFromFamilyUpdates(realtimeChannelRef.current);
-    }
-
-    realtimeChannelRef.current = subscribeToFamilyUpdates(childIds, {
-      onNewLog: (row) => {
-        setLogs(prev => {
-          // Avoid duplicates (we already optimistically added it)
-          if (prev.some(l => l.id === row.id)) return prev;
-          return [{
-            id: row.id, childId: row.child_id, bookTitle: row.book_title,
-            pages: row.pages, difficulty: row.difficulty,
-            reward: row.reward_type_id, status: row.status,
-            date: new Date(row.created_at).toLocaleDateString(),
-            adjusted: row.adjusted, originalPages: row.original_pages,
-          }, ...prev];
-        });
-      },
-      onLogUpdated: (row) => {
-        setLogs(prev => prev.map(l => l.id === row.id ? {
-          ...l, status: row.status, pages: row.pages,
-          adjusted: row.adjusted, originalPages: row.original_pages,
-        } : l));
-      },
-      onNewBook: (row) => {
-        setBooks(prev => {
-          if (prev.some(b => b.id === row.id)) return prev;
-          return [...prev, {
-            id: row.id, childId: row.child_id, title: row.title, authors: row.authors,
-            cover: row.cover_url || makeSvgCover(row.title, row.authors),
-            totalPages: row.total_pages, pagesRead: row.pages_read,
-            difficulty: row.difficulty, done: row.done,
-          }];
-        });
-      },
-      onBookUpdated: (row) => {
-        setBooks(prev => prev.map(b => b.id === row.id ? {
-          ...b, pagesRead: row.pages_read, done: row.done,
-        } : b));
-      },
-      onNewRedemption: (row) => {
-        setRedemptions(prev => {
-          if (prev.some(r => r.id === row.id)) return prev;
-          return [{
-            id: row.id, childId: row.child_id, rewardTypeId: row.reward_type_id,
-            amount: Number(row.amount), tierLabel: row.tier_label,
-            status: row.status, date: new Date(row.created_at).toLocaleDateString(),
-          }, ...prev];
-        });
-      },
-      onRedemptionUpdated: (row) => {
-        setRedemptions(prev => prev.map(r => r.id === row.id ? {
-          ...r, status: row.status,
-        } : r));
-      },
-    });
-
-    return () => {
-      if (realtimeChannelRef.current) {
-        unsubscribeFromFamilyUpdates(realtimeChannelRef.current);
-        realtimeChannelRef.current = null;
-      }
-    };
-  }, [children.length, parentAccount?.id]);
-
   /* Load all parent data from Supabase after auth */
   async function loadParentData(user) {
     try {
@@ -972,8 +897,6 @@ export default function App() {
   const [childPinInput, setChildPinInput]   = useState("");
   const [childPinError, setChildPinError]   = useState("");
   const [childPickMode, setChildPickMode]   = useState(false); // show child selector
-  const [childStandalone, setChildStandalone] = useState(false); // true when child logged in independently
-  const [childLoginForm, setChildLoginForm] = useState({familyCode:"",username:"",pin:"",error:""});
 
   /* ── signup form ── */
   const [signupForm, setSignupForm] = useState({username:"",email:"",password:"",passwordConfirm:"",error:""});
@@ -1028,7 +951,6 @@ export default function App() {
   const [editChildPin, setEditChildPin]   = useState({id:null,pin:"",confirm:"",error:""});
 
   const coverInputRef  = useRef();
-  const realtimeChannelRef = useRef(null);
 
   /* ── derived ── */
   const myChildren = children.filter(c=>c.parentId===parentAccount?.id);
@@ -1118,11 +1040,6 @@ export default function App() {
   }
 
   async function handleLogout() {
-    // Clean up realtime subscription
-    if (realtimeChannelRef.current) {
-      unsubscribeFromFamilyUpdates(realtimeChannelRef.current);
-      realtimeChannelRef.current = null;
-    }
     await logOut();
     setParentAccount(null);
     setChildren([]); setBooks([]); setLogs([]); setRedemptions([]); setAchievements([]);
@@ -1191,74 +1108,6 @@ export default function App() {
     setMode("parent"); setParentView("dashboard");
   }
 
-  async function handleChildStandaloneLogin() {
-    const { familyCode, username, pin } = childLoginForm;
-    if (!familyCode.trim()) return setChildLoginForm(f=>({...f,error:"Family code is required"}));
-    if (!username.trim()) return setChildLoginForm(f=>({...f,error:"Username is required"}));
-    if (pin.length < 4) return setChildLoginForm(f=>({...f,error:"Enter your 4-digit PIN"}));
-
-    setAuthLoading(true);
-    const { data, error } = await childStandaloneLogin({
-      familyCode: familyCode.trim(),
-      childUsername: username.trim(),
-      pin,
-    });
-    setAuthLoading(false);
-
-    if (error || !data?.valid) {
-      setChildLoginForm(f=>({...f,error: data?.error || error?.message || "Login failed", pin:""}));
-      return;
-    }
-
-    // Success — set up standalone child session
-    const c = data.child;
-    setChildren([{
-      id: c.id, parentId: c.parentId, name: c.name, username: c.username,
-      pin: "••••", colorIdx: c.colorIdx, avatar: c.avatar,
-    }]);
-    setBooks((data.books || []).map(b => ({
-      id: b.id, childId: b.child_id, title: b.title, authors: b.authors,
-      cover: b.cover_url || makeSvgCover(b.title, b.authors),
-      totalPages: b.total_pages, pagesRead: b.pages_read,
-      difficulty: b.difficulty, done: b.done,
-    })));
-    setLogs((data.logs || []).map(l => ({
-      id: l.id, childId: l.child_id, bookTitle: l.book_title,
-      pages: l.pages, difficulty: l.difficulty,
-      reward: l.reward_type_id, status: l.status,
-      date: new Date(l.created_at).toLocaleDateString(),
-      adjusted: l.adjusted, originalPages: l.original_pages,
-    })));
-    if (data.rewardConfigs && data.rewardConfigs.length > 0) {
-      setRewards(data.rewardConfigs.map(r => ({
-        id: r.reward_key, label: r.label, icon: r.icon,
-        unit: r.unit, rate: Number(r.rate), color: r.color,
-        tiers: r.tiers || [{label:"Small",amount:15},{label:"Medium",amount:30},{label:"Large",amount:60}],
-        autoApprove: r.auto_approve || false,
-      })));
-    }
-    if (data.diffBonuses && data.diffBonuses.length > 0) {
-      const bonusMap = {};
-      data.diffBonuses.forEach(b => { bonusMap[b.difficulty] = { bonusType: b.bonus_type, bonusValue: Number(b.bonus_value) }; });
-      setDiffBonuses(bonusMap);
-    }
-    setRedemptions((data.redemptions || []).map(r => ({
-      id: r.id, childId: r.child_id, rewardTypeId: r.reward_type_id,
-      amount: Number(r.amount), tierLabel: r.tier_label,
-      status: r.status, date: new Date(r.created_at).toLocaleDateString(),
-    })));
-    setAchievements((data.achievements || []).map(a => ({
-      childId: a.child_id, badgeId: a.badge_key, earnedAt: a.earned_at,
-    })));
-
-    setActiveChildId(c.id);
-    setChildStandalone(true);
-    setParentAccount(null); // no parent session
-    setScreen("app"); setMode("child"); setChildView("home");
-    setChildPickMode(false); setDataLoading(false);
-    setChildLoginForm({familyCode:"",username:"",pin:"",error:""});
-  }
-
   /* ══════════════════════════════════════════════
      APP HANDLERS
   ══════════════════════════════════════════════ */
@@ -1279,31 +1128,24 @@ export default function App() {
     if(totalPages > 9999) return showToast("Pages can't exceed 9,999");
     setAuthLoading(true);
 
-    // Upload cover image if provided (only works with parent auth)
+    // Upload cover image if provided
     let coverUrl = null;
-    if (addBookForm.coverFile && !childStandalone) {
+    if (addBookForm.coverFile) {
       const { url, error: uploadErr } = await uploadCover(addBookForm.coverFile, activeChildId);
       if (uploadErr) showToast("Cover upload failed — book saved without cover");
       if (!uploadErr && url) coverUrl = url;
     }
 
-    let newBook, error;
-    if (childStandalone) {
-      const res = await childAddBook({
-        childId: activeChildId,
-        title: addBookForm.title.trim(), authors: addBookForm.authors.trim(),
-        coverUrl, totalPages, difficulty: addBookForm.difficulty,
-      });
-      newBook = res.data?.data; error = res.error || (res.data?.error ? {message:res.data.error} : null);
-    } else {
-      const res = await addBookToDb({
-        childId: activeChildId, title: addBookForm.title.trim(),
-        authors: addBookForm.authors.trim(), coverUrl, totalPages, difficulty: addBookForm.difficulty,
-      });
-      newBook = res.data; error = res.error;
-    }
+    const { data: newBook, error } = await addBookToDb({
+      childId: activeChildId,
+      title: addBookForm.title.trim(),
+      authors: addBookForm.authors.trim(),
+      coverUrl,
+      totalPages,
+      difficulty: addBookForm.difficulty,
+    });
     setAuthLoading(false);
-    if(error || !newBook) return showToast("Failed to add book — " + (error?.message || "try again"));
+    if(error) return showToast("Failed to add book — " + (error.message || "try again"));
     setBooks(p=>[...p,{
       id: newBook.id, childId: newBook.child_id,
       title: newBook.title, authors: newBook.authors,
@@ -1319,33 +1161,27 @@ export default function App() {
     const pages = parseInt(logForm.pages);
     if(isNaN(pages) || pages < 1) return showToast("Enter at least 1 page");
     if(pages > 9999) return showToast("Pages can't exceed 9,999");
-    setAuthLoading(true);
-
-    let newLog, error;
-    if (childStandalone) {
-      const res = await childSubmitLog({
-        childId: activeChildId, bookId: logForm.book.id,
-        bookTitle: logForm.book.title, pages,
-        difficulty: logForm.book.difficulty, rewardTypeId: logForm.reward,
-      });
-      newLog = res.data?.data; error = res.error || (res.data?.error ? {message:res.data.error} : null);
-    } else {
-      const res = await addLogToDb({
-        childId: activeChildId, bookId: logForm.book.id,
-        bookTitle: logForm.book.title, pages,
-        difficulty: logForm.book.difficulty, rewardTypeId: logForm.reward,
-      });
-      newLog = res.data; error = res.error;
-      // Update book pages in Supabase (parent auth path)
-      if (!error) {
-        const updatedPages = logForm.book.pagesRead + pages;
-        await updateBookInDb(logForm.book.id, { pages_read: updatedPages });
-      }
+    // Warn if logging more pages than remaining
+    const remaining = logForm.book.totalPages - logForm.book.pagesRead;
+    if(pages > remaining && remaining > 0) {
+      // Allow it but it's fine — they might re-read
     }
+    setAuthLoading(true);
+    const { data: newLog, error } = await addLogToDb({
+      childId: activeChildId,
+      bookId: logForm.book.id,
+      bookTitle: logForm.book.title,
+      pages,
+      difficulty: logForm.book.difficulty,
+      rewardTypeId: logForm.reward,
+    });
     setAuthLoading(false);
-    if(error || !newLog) return showToast("Failed to submit — " + (error?.message || "try again"));
-
+    if(error) return showToast("Failed to submit — " + (error.message || "try again"));
+    // Update book pages in Supabase
     const updatedPages = logForm.book.pagesRead + pages;
+    await updateBookInDb(logForm.book.id, { pages_read: updatedPages });
+    // Update local state
+    // Capture data for push notification before resetting form
     const pushChildName = children.find(c=>c.id===activeChildId)?.name || "Your child";
     const pushPages = pages;
     const pushBookTitle = logForm.book.title;
@@ -1358,8 +1194,9 @@ export default function App() {
       difficulty: newLog.difficulty, reward: newLog.reward_type_id,
       status: "pending", date: "Just now", adjusted: false,
     },...p]);
-    setLogForm({book:null,pages:"",reward:rewards[0]?.id||""}); setChildView("home"); setConfirmLog(false);
+    setLogForm({book:null,pages:"",reward:rewards.find(r=>!r.retired)?.id||""}); setChildView("home"); setConfirmLog(false);
     checkAchievements(activeChildId);
+    // Notify parent (if preference enabled)
     if (pushParentId && notifPrefs.reading_logs) {
       sendPushNotification({
         parentId: pushParentId,
@@ -1372,11 +1209,7 @@ export default function App() {
   async function markDone(bookId) {
     const book = books.find(b=>b.id===bookId);
     if(!book) return;
-    if (childStandalone) {
-      await childMarkBookDone({ childId: activeChildId, bookId, totalPages: book.totalPages });
-    } else {
-      await updateBookInDb(bookId, { done: true, pages_read: book.totalPages });
-    }
+    await updateBookInDb(bookId, { done: true, pages_read: book.totalPages });
     setBooks(p=>p.map(b=>b.id===bookId?{...b,done:true,pagesRead:b.totalPages}:b));
     checkAchievements(book.childId);
   }
@@ -1530,17 +1363,13 @@ export default function App() {
 
     if(dbErr) return setAddChildForm(f=>({...f,error:dbErr.message}));
 
-    const isFirstChild = children.length === 0;
     setChildren(p=>[...p,{
       id: newChild.id, parentId: newChild.parent_id,
       name: newChild.name, username: newChild.username,
       pin: "••••", colorIdx: newChild.color_idx,
       avatar: newChild.avatar_url,
     }]);
-    setAddChildForm(EMPTY_CHILD_FORM);
-    console.log("Setting parentView to shareWithChild, mode:", mode, "screen:", screen, "childPickMode:", childPickMode);
-    setParentView("shareWithChild");
-    showToast(`👧 ${name.trim()} added!`, "success");
+    setAddChildForm(EMPTY_CHILD_FORM); setParentView("dashboard");
   }
   async function saveChildPin() {
     if(editChildPin.pin.length<4)             return setEditChildPin(f=>({...f,error:"Must be 4 digits"}));
@@ -1579,54 +1408,14 @@ export default function App() {
         <div className="landing-subtitle">Read more. Earn more.</div>
         <div className="landing-actions">
           <button className="btn btn-primary" onClick={()=>setScreen("parentLogin")}>
-            👨‍👩‍👧 Parent Log In
+            👨‍👩‍👧 Parent Login
           </button>
           <button className="btn btn-secondary" onClick={()=>setScreen("parentSignup")}>
-            ✨ Create Account
+            ✨ Create Parent Account
           </button>
           <div className="landing-divider">— or —</div>
-          <button className="btn btn-primary btn-orange" onClick={()=>setScreen("childLogin")} style={{padding:"14px 0",fontSize:15}}>
-            👧 I'm a Child
-          </button>
-        </div>
-      </div>
-    </Wrap>
-  );
-
-  /* ══ CHILD STANDALONE LOGIN ════════════════════════════════════ */
-  if(screen==="childLogin") return (
-    <Wrap>
-      <div className="auth-page">
-        <button className="btn btn-ghost" onClick={()=>setScreen("landing")} style={{marginBottom:24}}>← Back</button>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{fontSize:48,marginBottom:8}}>👧</div>
-          <div className="auth-title">Child Login</div>
-          <div className="auth-subtitle">Ask your parent for these details</div>
-        </div>
-
-        <div className="auth-form">
-          <div>
-            <div className="slabel">FAMILY CODE</div>
-            <input className="ifield" placeholder="e.g. ThompsonFamily"
-              value={childLoginForm.familyCode}
-              onChange={e=>setChildLoginForm(f=>({...f,familyCode:e.target.value,error:""}))}/>
-          </div>
-          <div>
-            <div className="slabel">YOUR USERNAME</div>
-            <input className="ifield" placeholder="e.g. emma"
-              value={childLoginForm.username}
-              onChange={e=>setChildLoginForm(f=>({...f,username:e.target.value.toLowerCase().replace(/\s/g,""),error:""}))}/>
-          </div>
-          <div>
-            <div className="slabel">YOUR 4-DIGIT PIN</div>
-            <PinPad length={4} value={childLoginForm.pin}
-              onChange={v=>setChildLoginForm(f=>({...f,pin:v,error:""}))}
-              error={childLoginForm.error}/>
-          </div>
-          <button className={`btn btn-primary btn-orange ${authLoading?"btn-loading":""}`}
-            onClick={handleChildStandaloneLogin} disabled={authLoading}
-            style={{width:"100%",padding:"15px 0",fontSize:16,marginTop:8}}>
-            {authLoading?"Logging in…":"Let's Read! →"}
+          <button className="btn btn-primary btn-orange" onClick={()=>{ setScreen("app"); setChildPickMode(true); }} style={{padding:"14px 0",fontSize:15}}>
+            👧 I'm a Child — Log In
           </button>
         </div>
       </div>
@@ -1771,14 +1560,13 @@ export default function App() {
   if(screen==="app" && (childPickMode || (!activeChildId && mode==="child"))) return (
     <Wrap>
       <div className="auth-page">
-        {/* parent escape — only show when parent is authenticated and switching */}
-        {parentAccount && (
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
-            <button className="btn btn-ghost-sm" onClick={()=>{
-              setChildPickMode(false); setMode("parent"); setParentView("dashboard");
-            }}>👨‍👩‍👧 Parent Dashboard</button>
-          </div>
-        )}
+        {/* parent escape */}
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+          <button className="btn btn-ghost-sm" onClick={()=>{
+            if(parentAccount) { setChildPickMode(false); setMode("parent"); setParentView("dashboard"); }
+            else { setScreen("parentLogin"); setLoginForm({email:"",password:"",error:""}); }
+          }}>👨‍👩‍👧 {parentAccount?"Parent Dashboard":"Parent login"}</button>
+        </div>
 
         {!activeChildId ? (
           <>
@@ -1831,15 +1619,7 @@ export default function App() {
           {mode==="child" && activeChild && (
             <div className="app-header-actions">
               <Avatar child={activeChild} size={32} ring/>
-              {childStandalone ? (
-                <button className="btn btn-ghost-sm" onClick={()=>{
-                  setChildStandalone(false); setActiveChildId(null);
-                  setChildren([]); setBooks([]); setLogs([]); setRedemptions([]); setAchievements([]);
-                  setScreen("landing"); setMode("child");
-                }} aria-label="Log out">🚪</button>
-              ) : (
-                <button className="btn btn-ghost-sm" onClick={()=>{setActiveChildId(null);setChildPickMode(true);}} aria-label="Switch child">🔄</button>
-              )}
+              <button className="btn btn-ghost-sm" onClick={handleParentAccess} aria-label="Parent dashboard">👨‍👩‍👧</button>
             </div>
           )}
           {mode==="parent" && (
@@ -1855,37 +1635,7 @@ export default function App() {
           <>
             {/* HOME */}
             {childView==="home" && (
-              dataLoading ? <LoadingSkeleton/> :
-              (myBooks.length===0 && myLogs.length===0) ? (
-                <div className="slide-up" style={{textAlign:"center",padding:"10px 0 20px"}}>
-                  <Avatar child={activeChild} size={64} ring/>
-                  <div style={{fontSize:24,fontWeight:900,margin:"12px 0 4px"}}>Welcome, {activeChild.name}! 🎉</div>
-                  <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24,lineHeight:1.6}}>Ready to earn rewards for reading? Let's get started!</div>
-
-                  <div className="card" style={{padding:18,marginBottom:14,textAlign:"left"}}>
-                    <div style={{fontWeight:800,fontSize:15,marginBottom:14}}>How it works:</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#4776E6,#8E54E9)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>1</div>
-                        <div><div style={{fontWeight:700,fontSize:13}}>Add a book you're reading</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Type the title, author, and how many pages it has</div></div>
-                      </div>
-                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#FF6B35,#FF8E53)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>2</div>
-                        <div><div style={{fontWeight:700,fontSize:13}}>Log your reading sessions</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>After reading, tap "Log pages" and enter how many pages you read</div></div>
-                      </div>
-                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#27AE60,#2ECC71)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>3</div>
-                        <div><div style={{fontWeight:700,fontSize:13}}>Earn rewards!</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Your parent approves and you earn {rewards.find(r=>!r.retired)?.icon||"🎮"} {rewards.find(r=>!r.retired)?.label||"rewards"}!</div></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button className="btn btn-primary btn-orange" onClick={()=>setChildView("addBook")} style={{width:"100%",padding:"15px 0",fontSize:16}}>
-                    📖 Add Your First Book →
-                  </button>
-                </div>
-              ) : (
-                <div>
+              dataLoading ? <LoadingSkeleton/> : <>
                 <div className="child-shelf-header">
                   <Avatar child={activeChild} size={44} ring/>
                   <div>
@@ -1939,7 +1689,7 @@ export default function App() {
                       <div className="empty-state-body">Add your first book to start earning rewards for reading.</div>
                     </div>
                   ) : (
-                    <div style={{display:"flex",gap:8}}>{slots.map((b,i)=><BookSlot key={i} book={b} onMarkDone={markDone} onLogReading={b=>{ setLogForm({book:b,pages:"",reward:rewards[0]?.id||""}); setConfirmLog(false); setChildView("logReading"); }}/>)}</div>
+                    <div style={{display:"flex",gap:8}}>{slots.map((b,i)=><BookSlot key={i} book={b} onMarkDone={markDone} onLogReading={b=>{ setLogForm({book:b,pages:"",reward:rewards.find(r=>!r.retired)?.id||""}); setConfirmLog(false); setChildView("logReading"); }}/>)}</div>
                   )}
                   <button className="btn" onClick={()=>canAddBook&&setChildView("addBook")} aria-label={canAddBook?"Add a new book":"Complete a book first"} style={{width:"100%",marginTop:10,padding:"13px 0",fontSize:14,background:canAddBook?"linear-gradient(135deg,#4776E6,#8E54E9)":"rgba(255,255,255,0.05)",color:canAddBook?"#fff":"rgba(255,255,255,0.25)",cursor:canAddBook?"pointer":"not-allowed",boxShadow:canAddBook?"0 4px 16px rgba(71,118,230,0.35)":"none"}}>
                     {myBooks.length===0?"📖 Add Your First Book!":canAddBook?"＋ Add a Book":"🔒 Complete a book first"}
@@ -2063,8 +1813,7 @@ export default function App() {
                     <div className="empty-state-body">Add a book and start logging pages to see your activity here. Every session you log earns rewards!</div>
                   </div>;
                 })()}
-              </div>
-              )
+              </>
             )}
 
             {/* ADD BOOK */}
@@ -2731,68 +2480,6 @@ export default function App() {
               </div>;
             })()}
 
-            {/* SHARE WITH CHILD (after adding first child) */}
-            {parentView==="shareWithChild" && (()=>{
-              const lastChild = myChildren[myChildren.length - 1];
-              if (!lastChild) return <div className="slide-up"><button className="btn btn-primary" onClick={()=>setParentView("dashboard")}>Go to Dashboard →</button></div>;
-              return <div className="slide-up" style={{padding:"20px 0"}}>
-                <div style={{textAlign:"center",marginBottom:20}}>
-                  <div style={{fontSize:48,marginBottom:8}}>🎉</div>
-                  <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{lastChild.name} is ready!</div>
-                  <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.5}}>Share this login card with your child. They can screenshot it or you can send it.</div>
-                </div>
-
-                {/* Visual login card — designed for screenshots */}
-                <div style={{background:"linear-gradient(135deg,#1a1a3e,#2d2b55)",border:"2px solid rgba(71,118,230,0.4)",borderRadius:20,padding:"24px 20px",marginBottom:16,position:"relative",overflow:"hidden"}}>
-                  <div style={{position:"absolute",top:0,right:0,width:120,height:120,background:"radial-gradient(circle,rgba(71,118,230,0.15),transparent)",borderRadius:"0 0 0 100%"}}/>
-                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
-                    <div style={{fontSize:28}}>📚</div>
-                    <div><div style={{fontSize:16,fontWeight:900}}>ReadReward</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Your login details</div></div>
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
-                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>FAMILY CODE</div>
-                      <div style={{fontSize:18,fontWeight:900,color:"#93C5FD",fontFamily:"monospace"}}>{parentAccount?.username}</div>
-                    </div>
-                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
-                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>USERNAME</div>
-                      <div style={{fontSize:18,fontWeight:900,color:"#FF8E53",fontFamily:"monospace"}}>{lastChild.username}</div>
-                    </div>
-                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
-                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>PIN</div>
-                      <div style={{fontSize:18,fontWeight:900,color:"#2ECC71",fontFamily:"monospace",letterSpacing:6}}>Ask your parent</div>
-                    </div>
-                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
-                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>LOGIN AT</div>
-                      <div style={{fontSize:14,fontWeight:700,color:"#8E54E9"}}>readreward.vercel.app</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                {navigator.share && (
-                  <button className="btn btn-primary btn-orange" onClick={()=>{
-                    navigator.share({
-                      title:`ReadReward login for ${lastChild.name}`,
-                      text:`📚 ReadReward Login\n\nFamily Code: ${parentAccount?.username}\nUsername: ${lastChild.username}\nPIN: (ask parent)\n\nLogin at: readreward.vercel.app\nTap "I'm a Child" to get started!`,
-                    }).catch(()=>{});
-                  }} style={{width:"100%",padding:"14px 0",fontSize:15,marginBottom:10}}>
-                    📤 Share login card
-                  </button>
-                )}
-                <button className="btn" onClick={()=>{
-                  const text = `📚 ReadReward Login\n\nFamily Code: ${parentAccount?.username}\nUsername: ${lastChild.username}\nPIN: (ask parent)\n\nLogin at: readreward.vercel.app`;
-                  navigator.clipboard?.writeText(text).then(()=>showToast("Login details copied!","success")).catch(()=>{});
-                }} style={{width:"100%",padding:"12px 0",fontSize:13,background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.6)",marginBottom:16}}>
-                  📋 Copy login details
-                </button>
-
-                <button className="btn btn-primary" onClick={()=>setParentView("dashboard")} style={{width:"100%",padding:"14px 0",fontSize:15}}>
-                  Go to Dashboard →
-                </button>
-              </div>;
-            })()}
-
             {/* SETUP TAB */}
             {parentView==="setup" && (
               <SetupTab
@@ -2811,8 +2498,23 @@ export default function App() {
                     auto_approve: reward.autoApprove || false,
                   });
                 }}
-                onDeleteReward={async (rewardId) => {
-                  await deleteRewardConfig(rewardId);
+                onDeleteReward={(rewardId) => {
+                  // Check if any child has balance in this reward
+                  const hasBalance = children.some(child => {
+                    const childLogs = logs.filter(l=>l.childId===child.id && l.status==="approved");
+                    const earned = childLogs.filter(l=>l.reward===rewardId).reduce((sum,l)=>sum+calcPts(l.pages, l.difficulty, l.reward),0);
+                    const redeemed = redemptions.filter(r=>r.childId===child.id && r.rewardTypeId===rewardId && r.status==="approved").reduce((sum,r)=>sum+r.amount,0);
+                    return (earned - redeemed) > 0;
+                  });
+                  if (hasBalance) {
+                    // Retire — don't delete from DB, just mark locally
+                    showToast("Reward retired — children can still spend their remaining balance", "info");
+                    return false; // signals SetupTab to mark as retired
+                  } else {
+                    // Safe to fully delete
+                    deleteRewardConfig(rewardId);
+                    return true; // signals SetupTab to remove
+                  }
                 }}
                 onSaveBonus={async (diff, bonus) => {
                   await upsertDifficultyBonus({
