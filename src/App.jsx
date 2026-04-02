@@ -1457,6 +1457,7 @@ export default function App() {
       avatar: newChild.avatar_url,
     }]);
     setAddChildForm(EMPTY_CHILD_FORM);
+    console.log("Setting parentView to shareWithChild, mode:", mode, "screen:", screen, "childPickMode:", childPickMode);
     setParentView("shareWithChild");
     showToast(`👧 ${name.trim()} added!`, "success");
   }
@@ -1497,14 +1498,10 @@ export default function App() {
         <div className="landing-subtitle">Read more. Earn more.</div>
         <div className="landing-actions">
           <button className="btn btn-primary" onClick={()=>setScreen("parentLogin")}>
-            👨‍👩‍👧 Parent Login
+            👨‍👩‍👧 Log In
           </button>
           <button className="btn btn-secondary" onClick={()=>setScreen("parentSignup")}>
-            ✨ Create Parent Account
-          </button>
-          <div className="landing-divider">— or —</div>
-          <button className="btn btn-primary btn-orange" onClick={()=>{ setScreen("app"); setChildPickMode(true); }} style={{padding:"14px 0",fontSize:15}}>
-            👧 I'm a Child — Log In
+            ✨ Create Account
           </button>
         </div>
       </div>
@@ -1649,13 +1646,14 @@ export default function App() {
   if(screen==="app" && (childPickMode || (!activeChildId && mode==="child"))) return (
     <Wrap>
       <div className="auth-page">
-        {/* parent escape */}
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
-          <button className="btn btn-ghost-sm" onClick={()=>{
-            if(parentAccount) { setChildPickMode(false); setMode("parent"); setParentView("dashboard"); }
-            else { setScreen("parentLogin"); setLoginForm({email:"",password:"",error:""}); }
-          }}>👨‍👩‍👧 {parentAccount?"Parent Dashboard":"Parent login"}</button>
-        </div>
+        {/* parent escape — only show when parent is authenticated and switching */}
+        {parentAccount && (
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+            <button className="btn btn-ghost-sm" onClick={()=>{
+              setChildPickMode(false); setMode("parent"); setParentView("dashboard");
+            }}>👨‍👩‍👧 Parent Dashboard</button>
+          </div>
+        )}
 
         {!activeChildId ? (
           <>
@@ -1708,7 +1706,7 @@ export default function App() {
           {mode==="child" && activeChild && (
             <div className="app-header-actions">
               <Avatar child={activeChild} size={32} ring/>
-              <button className="btn btn-ghost-sm" onClick={handleParentAccess} aria-label="Parent dashboard">👨‍👩‍👧</button>
+              <button className="btn btn-ghost-sm" onClick={()=>{setActiveChildId(null);setChildPickMode(true);}} aria-label="Switch child">🔄</button>
             </div>
           )}
           {mode==="parent" && (
