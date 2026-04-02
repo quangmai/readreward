@@ -1981,7 +1981,7 @@ export default function App() {
                 </div>
                 <div className="card" style={{padding:16,marginBottom:12}}><div className="slabel">PAGES READ TODAY</div><input className="ifield" type="number" placeholder="e.g. 20" value={logForm.pages} onChange={e=>setLogForm(f=>({...f,pages:e.target.value}))} style={{textAlign:"center",fontSize:28,fontWeight:900}}/></div>
                 <div className="card" style={{padding:16,marginBottom:18}}><div className="slabel">I WANT TO EARN…</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>{rewards.filter(r=>!r.retired).map(r=>{
+                  <div className="reward-grid">{rewards.filter(r=>!r.retired).map(r=>{
                     const pts=logForm.pages?calcPts(parseInt(logForm.pages), logForm.book.difficulty, r.id):"?";
                     return <button key={r.id} className="btn" onClick={()=>setLogForm(f=>({...f,reward:r.id}))} style={{padding:"13px 6px",background:logForm.reward===r.id?r.color+"30":"rgba(255,255,255,0.06)",border:logForm.reward===r.id?`2px solid ${r.color}`:"2px solid transparent",color:"#fff",fontSize:12}}>
                       <div style={{fontSize:20}}>{r.icon}</div><div style={{fontWeight:800,marginTop:3,fontSize:11}}>{r.label}</div><div style={{fontSize:14,fontWeight:900,color:r.color,marginTop:3}}>{pts}{r.unit==="p"?"p":` ${r.unit}`}</div>
