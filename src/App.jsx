@@ -17,6 +17,7 @@ import {
   approveRedemption as approveRedemptionInDb, rejectRedemption as rejectRedemptionInDb,
   getAllAchievements, addAchievement as addAchievementToDb,
   subscribeToPush, savePushSubscription, getPushPermission, sendPushNotification,
+  subscribeToFamilyUpdates, unsubscribeFromFamilyUpdates,
 } from "./supabase";
 
 /* ─────────────────────────────────────────────
@@ -782,6 +783,79 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authUser, passwordRecovery]);
 
+  /* ── Realtime subscriptions: update data when changes happen on other devices ── */
+  useEffect(() => {
+    // Only subscribe when we have children loaded
+    if (!children.length || !parentAccount) return;
+
+    const childIds = children.map(c => c.id);
+
+    // Clean up old subscription
+    if (realtimeChannelRef.current) {
+      unsubscribeFromFamilyUpdates(realtimeChannelRef.current);
+    }
+
+    realtimeChannelRef.current = subscribeToFamilyUpdates(childIds, {
+      onNewLog: (row) => {
+        setLogs(prev => {
+          // Avoid duplicates (we already optimistically added it)
+          if (prev.some(l => l.id === row.id)) return prev;
+          return [{
+            id: row.id, childId: row.child_id, bookTitle: row.book_title,
+            pages: row.pages, difficulty: row.difficulty,
+            reward: row.reward_type_id, status: row.status,
+            date: new Date(row.created_at).toLocaleDateString(),
+            adjusted: row.adjusted, originalPages: row.original_pages,
+          }, ...prev];
+        });
+      },
+      onLogUpdated: (row) => {
+        setLogs(prev => prev.map(l => l.id === row.id ? {
+          ...l, status: row.status, pages: row.pages,
+          adjusted: row.adjusted, originalPages: row.original_pages,
+        } : l));
+      },
+      onNewBook: (row) => {
+        setBooks(prev => {
+          if (prev.some(b => b.id === row.id)) return prev;
+          return [...prev, {
+            id: row.id, childId: row.child_id, title: row.title, authors: row.authors,
+            cover: row.cover_url || makeSvgCover(row.title, row.authors),
+            totalPages: row.total_pages, pagesRead: row.pages_read,
+            difficulty: row.difficulty, done: row.done,
+          }];
+        });
+      },
+      onBookUpdated: (row) => {
+        setBooks(prev => prev.map(b => b.id === row.id ? {
+          ...b, pagesRead: row.pages_read, done: row.done,
+        } : b));
+      },
+      onNewRedemption: (row) => {
+        setRedemptions(prev => {
+          if (prev.some(r => r.id === row.id)) return prev;
+          return [{
+            id: row.id, childId: row.child_id, rewardTypeId: row.reward_type_id,
+            amount: Number(row.amount), tierLabel: row.tier_label,
+            status: row.status, date: new Date(row.created_at).toLocaleDateString(),
+          }, ...prev];
+        });
+      },
+      onRedemptionUpdated: (row) => {
+        setRedemptions(prev => prev.map(r => r.id === row.id ? {
+          ...r, status: row.status,
+        } : r));
+      },
+    });
+
+    return () => {
+      if (realtimeChannelRef.current) {
+        unsubscribeFromFamilyUpdates(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+    };
+  }, [children.length, parentAccount?.id]);
+
   /* Load all parent data from Supabase after auth */
   async function loadParentData(user) {
     try {
@@ -951,6 +1025,7 @@ export default function App() {
   const [editChildPin, setEditChildPin]   = useState({id:null,pin:"",confirm:"",error:""});
 
   const coverInputRef  = useRef();
+  const realtimeChannelRef = useRef(null);
 
   /* ── derived ── */
   const myChildren = children.filter(c=>c.parentId===parentAccount?.id);
@@ -1040,6 +1115,11 @@ export default function App() {
   }
 
   async function handleLogout() {
+    // Clean up realtime subscription
+    if (realtimeChannelRef.current) {
+      unsubscribeFromFamilyUpdates(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
     await logOut();
     setParentAccount(null);
     setChildren([]); setBooks([]); setLogs([]); setRedemptions([]); setAchievements([]);

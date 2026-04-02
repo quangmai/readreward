@@ -572,6 +572,65 @@ export async function rejectRedemption(id) {
 
 
 // ─────────────────────────────────────────────
+// REALTIME SUBSCRIPTIONS
+// ─────────────────────────────────────────────
+
+/** Subscribe to changes on reading_logs, books, redemptions for a parent's children */
+export function subscribeToFamilyUpdates(childIds, callbacks) {
+  if (!childIds || childIds.length === 0) return null;
+
+  const channel = supabase.channel('family-updates')
+    // Reading logs — INSERT and UPDATE
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'reading_logs',
+      filter: `child_id=in.(${childIds.join(',')})`,
+    }, payload => callbacks.onNewLog?.(payload.new))
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'reading_logs',
+      filter: `child_id=in.(${childIds.join(',')})`,
+    }, payload => callbacks.onLogUpdated?.(payload.new))
+    // Books — INSERT and UPDATE
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'books',
+      filter: `child_id=in.(${childIds.join(',')})`,
+    }, payload => callbacks.onNewBook?.(payload.new))
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'books',
+      filter: `child_id=in.(${childIds.join(',')})`,
+    }, payload => callbacks.onBookUpdated?.(payload.new))
+    // Redemptions — INSERT and UPDATE
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'redemptions',
+      filter: `child_id=in.(${childIds.join(',')})`,
+    }, payload => callbacks.onNewRedemption?.(payload.new))
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'redemptions',
+      filter: `child_id=in.(${childIds.join(',')})`,
+    }, payload => callbacks.onRedemptionUpdated?.(payload.new))
+    .subscribe();
+
+  return channel;
+}
+
+/** Unsubscribe from family updates */
+export function unsubscribeFromFamilyUpdates(channel) {
+  if (channel) supabase.removeChannel(channel);
+}
+
+
+// ─────────────────────────────────────────────
 // PUSH NOTIFICATIONS
 // ─────────────────────────────────────────────
 
