@@ -1892,6 +1892,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div>
+                <div className="child-shelf-header">
                   <Avatar child={activeChild} size={44} ring/>
                   <div>
                     <div className="child-shelf-name">{activeChild.name}'s shelf</div>
