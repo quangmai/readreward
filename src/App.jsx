@@ -303,14 +303,8 @@ function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDi
     }
   }
   function deleteReward(id) {
-    // onDeleteReward returns true if fully deleted, false if retired
-    const fullyDeleted = onDeleteReward?.(id);
-    if (fullyDeleted) {
-      setRewards(prev => prev.filter(r => r.id!==id));
-    } else {
-      // Mark as retired locally
-      setRewards(prev => prev.map(r => r.id===id ? {...r, retired: true} : r));
-    }
+    setRewards(prev => prev.filter(r => r.id!==id));
+    onDeleteReward?.(id);
     if(editingRewardId===id) setEditingRewardId(null);
   }
   function addReward() {
@@ -368,7 +362,7 @@ function SetupTab({parentAccount,myChildren,rewards,setRewards,diffBonuses,setDi
             <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>Base rate: per 10 pages</div>
           </div>
 
-          {rewards.filter(r=>!r.retired).map(r=>{
+          {rewards.map(r=>{
             const isEditing = editingRewardId===r.id;
             const previewPts = calcPts(SAMPLE_PAGES,"medium",r.id,[r],diffBonuses);
             return (
@@ -1364,7 +1358,7 @@ export default function App() {
       difficulty: newLog.difficulty, reward: newLog.reward_type_id,
       status: "pending", date: "Just now", adjusted: false,
     },...p]);
-    setLogForm({book:null,pages:"",reward:rewards.find(r=>!r.retired)?.id||""}); setChildView("home"); setConfirmLog(false);
+    setLogForm({book:null,pages:"",reward:rewards[0]?.id||""}); setChildView("home"); setConfirmLog(false);
     checkAchievements(activeChildId);
     if (pushParentId && notifPrefs.reading_logs) {
       sendPushNotification({
@@ -1901,8 +1895,9 @@ export default function App() {
                 </div>
                 <div className="card pop reward-bank">
                   <div className="slabel">YOUR REWARD BANK</div>
-                  <div className="reward-grid">{rewards.filter(r=>!r.retired || balance[r.id]>0).map(r=><div key={r.id} onClick={()=>balance[r.id]>0&&setRedeemReward(r)} style={{cursor:balance[r.id]>0?"pointer":"default"}}>
-                    <RewardPill reward={r} earned={balance[r.id]} retired={r.retired}/>
+                  <div className="reward-grid">{rewards.filter(r=>!r.retired || balance[r.id]>0).map(r=><div key={r.id} onClick={()=>balance[r.id]>0&&setRedeemReward(r)} style={{cursor:balance[r.id]>0?"pointer":"default",position:"relative"}}>
+                    <RewardPill reward={r} earned={balance[r.id]}/>
+                    {r.retired&&<div style={{position:"absolute",top:4,right:4,background:"rgba(255,255,255,0.15)",borderRadius:6,padding:"1px 5px",fontSize:8,color:"rgba(255,255,255,0.5)",fontWeight:700}}>RETIRED</div>}
                   </div>)}</div>
                   {rewards.some(r=>balance[r.id]>0&&(!r.retired))&&<div className="reward-tap-hint">Tap a reward to spend it!</div>}
                 </div>
@@ -1944,7 +1939,7 @@ export default function App() {
                       <div className="empty-state-body">Add your first book to start earning rewards for reading.</div>
                     </div>
                   ) : (
-                    <div style={{display:"flex",gap:8}}>{slots.map((b,i)=><BookSlot key={i} book={b} onMarkDone={markDone} onLogReading={b=>{ setLogForm({book:b,pages:"",reward:rewards.find(r=>!r.retired)?.id||""}); setConfirmLog(false); setChildView("logReading"); }}/>)}</div>
+                    <div style={{display:"flex",gap:8}}>{slots.map((b,i)=><BookSlot key={i} book={b} onMarkDone={markDone} onLogReading={b=>{ setLogForm({book:b,pages:"",reward:rewards[0]?.id||""}); setConfirmLog(false); setChildView("logReading"); }}/>)}</div>
                   )}
                   <button className="btn" onClick={()=>canAddBook&&setChildView("addBook")} aria-label={canAddBook?"Add a new book":"Complete a book first"} style={{width:"100%",marginTop:10,padding:"13px 0",fontSize:14,background:canAddBook?"linear-gradient(135deg,#4776E6,#8E54E9)":"rgba(255,255,255,0.05)",color:canAddBook?"#fff":"rgba(255,255,255,0.25)",cursor:canAddBook?"pointer":"not-allowed",boxShadow:canAddBook?"0 4px 16px rgba(71,118,230,0.35)":"none"}}>
                     {myBooks.length===0?"📖 Add Your First Book!":canAddBook?"＋ Add a Book":"🔒 Complete a book first"}
@@ -2119,7 +2114,7 @@ export default function App() {
                 </div>
                 <div className="card" style={{padding:16,marginBottom:12}}><div className="slabel">PAGES READ TODAY</div><input className="ifield" type="number" placeholder="e.g. 20" value={logForm.pages} onChange={e=>setLogForm(f=>({...f,pages:e.target.value}))} style={{textAlign:"center",fontSize:28,fontWeight:900}}/></div>
                 <div className="card" style={{padding:16,marginBottom:18}}><div className="slabel">I WANT TO EARN…</div>
-                  <div className="reward-grid">{rewards.filter(r=>!r.retired).map(r=>{
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>{rewards.filter(r=>!r.retired).map(r=>{
                     const pts=logForm.pages?calcPts(parseInt(logForm.pages), logForm.book.difficulty, r.id):"?";
                     return <button key={r.id} className="btn" onClick={()=>setLogForm(f=>({...f,reward:r.id}))} style={{padding:"13px 6px",background:logForm.reward===r.id?r.color+"30":"rgba(255,255,255,0.06)",border:logForm.reward===r.id?`2px solid ${r.color}`:"2px solid transparent",color:"#fff",fontSize:12}}>
                       <div style={{fontSize:20}}>{r.icon}</div><div style={{fontWeight:800,marginTop:3,fontSize:11}}>{r.label}</div><div style={{fontSize:14,fontWeight:900,color:r.color,marginTop:3}}>{pts}{r.unit==="p"?"p":` ${r.unit}`}</div>
@@ -2816,23 +2811,8 @@ export default function App() {
                     auto_approve: reward.autoApprove || false,
                   });
                 }}
-                onDeleteReward={(rewardId) => {
-                  // Check if any child has balance in this reward
-                  const hasBalance = children.some(child => {
-                    const childLogs = logs.filter(l=>l.childId===child.id && l.status==="approved");
-                    const earned = childLogs.filter(l=>l.reward===rewardId).reduce((sum,l)=>sum+calcPts(l.pages, l.difficulty, l.reward),0);
-                    const redeemed = redemptions.filter(r=>r.childId===child.id && r.rewardTypeId===rewardId && r.status==="approved").reduce((sum,r)=>sum+r.amount,0);
-                    return (earned - redeemed) > 0;
-                  });
-                  if (hasBalance) {
-                    // Retire — don't delete from DB, just mark locally
-                    showToast("Reward retired — children can still spend their remaining balance", "info");
-                    return false; // signals SetupTab to mark as retired
-                  } else {
-                    // Safe to fully delete
-                    deleteRewardConfig(rewardId);
-                    return true; // signals SetupTab to remove
-                  }
+                onDeleteReward={async (rewardId) => {
+                  await deleteRewardConfig(rewardId);
                 }}
                 onSaveBonus={async (diff, bonus) => {
                   await upsertDifficultyBonus({
