@@ -82,6 +82,59 @@ export async function updateParentProfile(updates) {
 
 
 // ─────────────────────────────────────────────
+// CHILD STANDALONE LOGIN (no parent auth needed)
+// ─────────────────────────────────────────────
+
+/** Login a child independently via family code + username + PIN */
+export async function childStandaloneLogin({ familyCode, childUsername, pin }) {
+  const { data, error } = await supabase.functions.invoke('child-login', {
+    body: { familyCode, childUsername, pin },
+  });
+  return { data, error };
+}
+
+/** Submit a reading log from child standalone session */
+export async function childSubmitLog({ childId, parentId, bookId, bookTitle, pages, difficulty, rewardTypeId }) {
+  const { data, error } = await supabase.functions.invoke('child-action', {
+    body: { action: 'submit_log', childId, parentId, bookId, bookTitle, pages, difficulty, rewardTypeId },
+  });
+  return { data, error };
+}
+
+/** Submit a redemption from child standalone session */
+export async function childSubmitRedemption({ childId, rewardTypeId, amount, tierLabel, status }) {
+  const { data, error } = await supabase.functions.invoke('child-action', {
+    body: { action: 'submit_redemption', childId, rewardTypeId, amount, tierLabel, status },
+  });
+  return { data, error };
+}
+
+/** Add a book from child standalone session */
+export async function childAddBook({ childId, title, authors, coverUrl, totalPages, difficulty }) {
+  const { data, error } = await supabase.functions.invoke('child-action', {
+    body: { action: 'add_book', childId, title, authors, coverUrl, totalPages, difficulty },
+  });
+  return { data, error };
+}
+
+/** Mark book done from child standalone session */
+export async function childMarkBookDone({ childId, bookId, totalPages }) {
+  const { data, error } = await supabase.functions.invoke('child-action', {
+    body: { action: 'mark_done', childId, bookId, totalPages },
+  });
+  return { data, error };
+}
+
+/** Update book pages from child standalone session */
+export async function childUpdateBookPages({ childId, bookId, pagesRead }) {
+  const { data, error } = await supabase.functions.invoke('child-action', {
+    body: { action: 'update_book_pages', childId, bookId, pagesRead },
+  });
+  return { data, error };
+}
+
+
+// ─────────────────────────────────────────────
 // CHILDREN
 // ─────────────────────────────────────────────
 
