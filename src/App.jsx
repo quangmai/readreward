@@ -1369,7 +1369,14 @@ export default function App() {
       pin: "••••", colorIdx: newChild.color_idx,
       avatar: newChild.avatar_url,
     }]);
-    setAddChildForm(EMPTY_CHILD_FORM); setParentView("dashboard");
+    setAddChildForm(EMPTY_CHILD_FORM);
+    // If this was the first child, show the share screen
+    if (children.length === 0) {
+      setParentView("shareWithChild");
+    } else {
+      setParentView("dashboard");
+    }
+    showToast(`👧 ${name.trim()} added!`, "success");
   }
   async function saveChildPin() {
     if(editChildPin.pin.length<4)             return setEditChildPin(f=>({...f,error:"Must be 4 digits"}));
@@ -1636,6 +1643,37 @@ export default function App() {
             {/* HOME */}
             {childView==="home" && (
               dataLoading ? <LoadingSkeleton/> : <>
+                {/* First-time child welcome */}
+                {myBooks.length===0 && myLogs.length===0 ? (
+                  <div className="slide-up" style={{textAlign:"center",padding:"10px 0 20px"}}>
+                    <Avatar child={activeChild} size={64} ring/>
+                    <div style={{fontSize:24,fontWeight:900,margin:"12px 0 4px"}}>Welcome, {activeChild.name}! 🎉</div>
+                    <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24,lineHeight:1.6}}>Ready to earn rewards for reading? Let's get started!</div>
+
+                    <div className="card" style={{padding:18,marginBottom:14,textAlign:"left"}}>
+                      <div style={{fontWeight:800,fontSize:15,marginBottom:14}}>How it works:</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                          <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#4776E6,#8E54E9)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>1</div>
+                          <div><div style={{fontWeight:700,fontSize:13}}>Add a book you're reading</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Type the title, author, and how many pages it has</div></div>
+                        </div>
+                        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                          <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#FF6B35,#FF8E53)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>2</div>
+                          <div><div style={{fontWeight:700,fontSize:13}}>Log your reading sessions</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>After reading, tap "Log pages" and enter how many pages you read</div></div>
+                        </div>
+                        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                          <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#27AE60,#2ECC71)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>3</div>
+                          <div><div style={{fontWeight:700,fontSize:13}}>Earn rewards!</div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2}}>Your parent approves and you earn {rewards.find(r=>!r.retired)?.icon||"🎮"} {rewards.find(r=>!r.retired)?.label||"rewards"}!</div></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button className="btn btn-primary btn-orange" onClick={()=>setChildView("addBook")} style={{width:"100%",padding:"15px 0",fontSize:16}}>
+                      📖 Add Your First Book →
+                    </button>
+                  </div>
+                ) : <>
+                {/* Normal child home */}
                 <div className="child-shelf-header">
                   <Avatar child={activeChild} size={44} ring/>
                   <div>
@@ -1813,7 +1851,7 @@ export default function App() {
                     <div className="empty-state-body">Add a book and start logging pages to see your activity here. Every session you log earns rewards!</div>
                   </div>;
                 })()}
-              </>
+              </></>
             )}
 
             {/* ADD BOOK */}
@@ -2479,6 +2517,65 @@ export default function App() {
                 )}
               </div>;
             })()}
+
+            {/* SHARE WITH CHILD (after adding first child) */}
+            {parentView==="shareWithChild" && (
+              <div className="slide-up" style={{textAlign:"center",padding:"20px 0"}}>
+                <div style={{fontSize:64,marginBottom:12}}>🎉</div>
+                <div style={{fontSize:22,fontWeight:900,marginBottom:6}}>Child added!</div>
+                <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24,lineHeight:1.6}}>
+                  Now share the app with your child so they can start logging their reading.
+                </div>
+
+                {/* Share link card */}
+                <div className="card" style={{padding:20,marginBottom:16,textAlign:"left"}}>
+                  <div className="slabel">APP LINK</div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <input readOnly value="https://readreward.vercel.app" className="ifield" style={{fontSize:13,padding:"10px 12px"}}
+                      onClick={e=>e.target.select()}/>
+                    <button className="btn" onClick={()=>{
+                      navigator.clipboard?.writeText("https://readreward.vercel.app").then(()=>showToast("Link copied!","success")).catch(()=>{});
+                    }} style={{padding:"10px 14px",background:"rgba(71,118,230,0.2)",color:"#93C5FD",fontSize:12,flexShrink:0}}>📋 Copy</button>
+                  </div>
+                </div>
+
+                {/* Share button (native share API) */}
+                {navigator.share && (
+                  <button className="btn btn-primary btn-orange" onClick={()=>{
+                    navigator.share({
+                      title:"ReadReward",
+                      text:`Hey! Log in to ReadReward with your PIN to start earning rewards for reading! 📚`,
+                      url:"https://readreward.vercel.app"
+                    }).catch(()=>{});
+                  }} style={{width:"100%",padding:"14px 0",fontSize:15,marginBottom:12}}>
+                    📤 Share with your child
+                  </button>
+                )}
+
+                {/* How it works for kids */}
+                <div className="card" style={{padding:16,marginBottom:16,textAlign:"left"}}>
+                  <div style={{fontWeight:800,fontSize:14,marginBottom:12}}>What your child does:</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{width:24,height:24,borderRadius:"50%",background:"#FF6B35",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>1</div>
+                      <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>Opens the link → taps <strong>"I'm a Child"</strong></div>
+                    </div>
+                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{width:24,height:24,borderRadius:"50%",background:"#FF6B35",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>2</div>
+                      <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>Selects their name → enters their PIN</div>
+                    </div>
+                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                      <div style={{width:24,height:24,borderRadius:"50%",background:"#FF6B35",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>3</div>
+                      <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>Adds their first book and starts reading! 📖</div>
+                    </div>
+                  </div>
+                </div>
+
+                <button className="btn btn-primary" onClick={()=>setParentView("dashboard")} style={{width:"100%",padding:"14px 0",fontSize:15}}>
+                  Go to Dashboard →
+                </button>
+              </div>
+            )}
 
             {/* SETUP TAB */}
             {parentView==="setup" && (
