@@ -18,6 +18,7 @@ import {
   getAllAchievements, addAchievement as addAchievementToDb,
   subscribeToPush, savePushSubscription, getPushPermission, sendPushNotification,
   subscribeToFamilyUpdates, unsubscribeFromFamilyUpdates,
+  childStandaloneLogin, childSubmitLog, childAddBook, childMarkBookDone, childUpdateBookPages, childSubmitRedemption,
 } from "./supabase";
 
 /* ─────────────────────────────────────────────
@@ -977,6 +978,8 @@ export default function App() {
   const [childPinInput, setChildPinInput]   = useState("");
   const [childPinError, setChildPinError]   = useState("");
   const [childPickMode, setChildPickMode]   = useState(false); // show child selector
+  const [childStandalone, setChildStandalone] = useState(false); // true when child logged in independently
+  const [childLoginForm, setChildLoginForm] = useState({familyCode:"",username:"",pin:"",error:""});
 
   /* ── signup form ── */
   const [signupForm, setSignupForm] = useState({username:"",email:"",password:"",passwordConfirm:"",error:""});
@@ -1194,6 +1197,74 @@ export default function App() {
     setMode("parent"); setParentView("dashboard");
   }
 
+  async function handleChildStandaloneLogin() {
+    const { familyCode, username, pin } = childLoginForm;
+    if (!familyCode.trim()) return setChildLoginForm(f=>({...f,error:"Family code is required"}));
+    if (!username.trim()) return setChildLoginForm(f=>({...f,error:"Username is required"}));
+    if (pin.length < 4) return setChildLoginForm(f=>({...f,error:"Enter your 4-digit PIN"}));
+
+    setAuthLoading(true);
+    const { data, error } = await childStandaloneLogin({
+      familyCode: familyCode.trim(),
+      childUsername: username.trim(),
+      pin,
+    });
+    setAuthLoading(false);
+
+    if (error || !data?.valid) {
+      setChildLoginForm(f=>({...f,error: data?.error || error?.message || "Login failed", pin:""}));
+      return;
+    }
+
+    // Success — set up standalone child session
+    const c = data.child;
+    setChildren([{
+      id: c.id, parentId: c.parentId, name: c.name, username: c.username,
+      pin: "••••", colorIdx: c.colorIdx, avatar: c.avatar,
+    }]);
+    setBooks((data.books || []).map(b => ({
+      id: b.id, childId: b.child_id, title: b.title, authors: b.authors,
+      cover: b.cover_url || makeSvgCover(b.title, b.authors),
+      totalPages: b.total_pages, pagesRead: b.pages_read,
+      difficulty: b.difficulty, done: b.done,
+    })));
+    setLogs((data.logs || []).map(l => ({
+      id: l.id, childId: l.child_id, bookTitle: l.book_title,
+      pages: l.pages, difficulty: l.difficulty,
+      reward: l.reward_type_id, status: l.status,
+      date: new Date(l.created_at).toLocaleDateString(),
+      adjusted: l.adjusted, originalPages: l.original_pages,
+    })));
+    if (data.rewardConfigs && data.rewardConfigs.length > 0) {
+      setRewards(data.rewardConfigs.map(r => ({
+        id: r.reward_key, label: r.label, icon: r.icon,
+        unit: r.unit, rate: Number(r.rate), color: r.color,
+        tiers: r.tiers || [{label:"Small",amount:15},{label:"Medium",amount:30},{label:"Large",amount:60}],
+        autoApprove: r.auto_approve || false,
+      })));
+    }
+    if (data.diffBonuses && data.diffBonuses.length > 0) {
+      const bonusMap = {};
+      data.diffBonuses.forEach(b => { bonusMap[b.difficulty] = { bonusType: b.bonus_type, bonusValue: Number(b.bonus_value) }; });
+      setDiffBonuses(bonusMap);
+    }
+    setRedemptions((data.redemptions || []).map(r => ({
+      id: r.id, childId: r.child_id, rewardTypeId: r.reward_type_id,
+      amount: Number(r.amount), tierLabel: r.tier_label,
+      status: r.status, date: new Date(r.created_at).toLocaleDateString(),
+    })));
+    setAchievements((data.achievements || []).map(a => ({
+      childId: a.child_id, badgeId: a.badge_key, earnedAt: a.earned_at,
+    })));
+
+    setActiveChildId(c.id);
+    setChildStandalone(true);
+    setParentAccount(null); // no parent session
+    setScreen("app"); setMode("child"); setChildView("home");
+    setChildPickMode(false); setDataLoading(false);
+    setChildLoginForm({familyCode:"",username:"",pin:"",error:""});
+  }
+
   /* ══════════════════════════════════════════════
      APP HANDLERS
   ══════════════════════════════════════════════ */
@@ -1214,24 +1285,31 @@ export default function App() {
     if(totalPages > 9999) return showToast("Pages can't exceed 9,999");
     setAuthLoading(true);
 
-    // Upload cover image if provided
+    // Upload cover image if provided (only works with parent auth)
     let coverUrl = null;
-    if (addBookForm.coverFile) {
+    if (addBookForm.coverFile && !childStandalone) {
       const { url, error: uploadErr } = await uploadCover(addBookForm.coverFile, activeChildId);
       if (uploadErr) showToast("Cover upload failed — book saved without cover");
       if (!uploadErr && url) coverUrl = url;
     }
 
-    const { data: newBook, error } = await addBookToDb({
-      childId: activeChildId,
-      title: addBookForm.title.trim(),
-      authors: addBookForm.authors.trim(),
-      coverUrl,
-      totalPages,
-      difficulty: addBookForm.difficulty,
-    });
+    let newBook, error;
+    if (childStandalone) {
+      const res = await childAddBook({
+        childId: activeChildId,
+        title: addBookForm.title.trim(), authors: addBookForm.authors.trim(),
+        coverUrl, totalPages, difficulty: addBookForm.difficulty,
+      });
+      newBook = res.data?.data; error = res.error || (res.data?.error ? {message:res.data.error} : null);
+    } else {
+      const res = await addBookToDb({
+        childId: activeChildId, title: addBookForm.title.trim(),
+        authors: addBookForm.authors.trim(), coverUrl, totalPages, difficulty: addBookForm.difficulty,
+      });
+      newBook = res.data; error = res.error;
+    }
     setAuthLoading(false);
-    if(error) return showToast("Failed to add book — " + (error.message || "try again"));
+    if(error || !newBook) return showToast("Failed to add book — " + (error?.message || "try again"));
     setBooks(p=>[...p,{
       id: newBook.id, childId: newBook.child_id,
       title: newBook.title, authors: newBook.authors,
@@ -1247,27 +1325,33 @@ export default function App() {
     const pages = parseInt(logForm.pages);
     if(isNaN(pages) || pages < 1) return showToast("Enter at least 1 page");
     if(pages > 9999) return showToast("Pages can't exceed 9,999");
-    // Warn if logging more pages than remaining
-    const remaining = logForm.book.totalPages - logForm.book.pagesRead;
-    if(pages > remaining && remaining > 0) {
-      // Allow it but it's fine — they might re-read
-    }
     setAuthLoading(true);
-    const { data: newLog, error } = await addLogToDb({
-      childId: activeChildId,
-      bookId: logForm.book.id,
-      bookTitle: logForm.book.title,
-      pages,
-      difficulty: logForm.book.difficulty,
-      rewardTypeId: logForm.reward,
-    });
+
+    let newLog, error;
+    if (childStandalone) {
+      const res = await childSubmitLog({
+        childId: activeChildId, bookId: logForm.book.id,
+        bookTitle: logForm.book.title, pages,
+        difficulty: logForm.book.difficulty, rewardTypeId: logForm.reward,
+      });
+      newLog = res.data?.data; error = res.error || (res.data?.error ? {message:res.data.error} : null);
+    } else {
+      const res = await addLogToDb({
+        childId: activeChildId, bookId: logForm.book.id,
+        bookTitle: logForm.book.title, pages,
+        difficulty: logForm.book.difficulty, rewardTypeId: logForm.reward,
+      });
+      newLog = res.data; error = res.error;
+      // Update book pages in Supabase (parent auth path)
+      if (!error) {
+        const updatedPages = logForm.book.pagesRead + pages;
+        await updateBookInDb(logForm.book.id, { pages_read: updatedPages });
+      }
+    }
     setAuthLoading(false);
-    if(error) return showToast("Failed to submit — " + (error.message || "try again"));
-    // Update book pages in Supabase
+    if(error || !newLog) return showToast("Failed to submit — " + (error?.message || "try again"));
+
     const updatedPages = logForm.book.pagesRead + pages;
-    await updateBookInDb(logForm.book.id, { pages_read: updatedPages });
-    // Update local state
-    // Capture data for push notification before resetting form
     const pushChildName = children.find(c=>c.id===activeChildId)?.name || "Your child";
     const pushPages = pages;
     const pushBookTitle = logForm.book.title;
@@ -1282,7 +1366,6 @@ export default function App() {
     },...p]);
     setLogForm({book:null,pages:"",reward:rewards.find(r=>!r.retired)?.id||""}); setChildView("home"); setConfirmLog(false);
     checkAchievements(activeChildId);
-    // Notify parent (if preference enabled)
     if (pushParentId && notifPrefs.reading_logs) {
       sendPushNotification({
         parentId: pushParentId,
@@ -1295,7 +1378,11 @@ export default function App() {
   async function markDone(bookId) {
     const book = books.find(b=>b.id===bookId);
     if(!book) return;
-    await updateBookInDb(bookId, { done: true, pages_read: book.totalPages });
+    if (childStandalone) {
+      await childMarkBookDone({ childId: activeChildId, bookId, totalPages: book.totalPages });
+    } else {
+      await updateBookInDb(bookId, { done: true, pages_read: book.totalPages });
+    }
     setBooks(p=>p.map(b=>b.id===bookId?{...b,done:true,pagesRead:b.totalPages}:b));
     checkAchievements(book.childId);
   }
@@ -1498,10 +1585,54 @@ export default function App() {
         <div className="landing-subtitle">Read more. Earn more.</div>
         <div className="landing-actions">
           <button className="btn btn-primary" onClick={()=>setScreen("parentLogin")}>
-            👨‍👩‍👧 Log In
+            👨‍👩‍👧 Parent Log In
           </button>
           <button className="btn btn-secondary" onClick={()=>setScreen("parentSignup")}>
             ✨ Create Account
+          </button>
+          <div className="landing-divider">— or —</div>
+          <button className="btn btn-primary btn-orange" onClick={()=>setScreen("childLogin")} style={{padding:"14px 0",fontSize:15}}>
+            👧 I'm a Child
+          </button>
+        </div>
+      </div>
+    </Wrap>
+  );
+
+  /* ══ CHILD STANDALONE LOGIN ════════════════════════════════════ */
+  if(screen==="childLogin") return (
+    <Wrap>
+      <div className="auth-page">
+        <button className="btn btn-ghost" onClick={()=>setScreen("landing")} style={{marginBottom:24}}>← Back</button>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:48,marginBottom:8}}>👧</div>
+          <div className="auth-title">Child Login</div>
+          <div className="auth-subtitle">Ask your parent for these details</div>
+        </div>
+
+        <div className="auth-form">
+          <div>
+            <div className="slabel">FAMILY CODE</div>
+            <input className="ifield" placeholder="e.g. ThompsonFamily"
+              value={childLoginForm.familyCode}
+              onChange={e=>setChildLoginForm(f=>({...f,familyCode:e.target.value,error:""}))}/>
+          </div>
+          <div>
+            <div className="slabel">YOUR USERNAME</div>
+            <input className="ifield" placeholder="e.g. emma"
+              value={childLoginForm.username}
+              onChange={e=>setChildLoginForm(f=>({...f,username:e.target.value.toLowerCase().replace(/\s/g,""),error:""}))}/>
+          </div>
+          <div>
+            <div className="slabel">YOUR 4-DIGIT PIN</div>
+            <PinPad length={4} value={childLoginForm.pin}
+              onChange={v=>setChildLoginForm(f=>({...f,pin:v,error:""}))}
+              error={childLoginForm.error}/>
+          </div>
+          <button className={`btn btn-primary btn-orange ${authLoading?"btn-loading":""}`}
+            onClick={handleChildStandaloneLogin} disabled={authLoading}
+            style={{width:"100%",padding:"15px 0",fontSize:16,marginTop:8}}>
+            {authLoading?"Logging in…":"Let's Read! →"}
           </button>
         </div>
       </div>
@@ -1706,7 +1837,15 @@ export default function App() {
           {mode==="child" && activeChild && (
             <div className="app-header-actions">
               <Avatar child={activeChild} size={32} ring/>
-              <button className="btn btn-ghost-sm" onClick={()=>{setActiveChildId(null);setChildPickMode(true);}} aria-label="Switch child">🔄</button>
+              {childStandalone ? (
+                <button className="btn btn-ghost-sm" onClick={()=>{
+                  setChildStandalone(false); setActiveChildId(null);
+                  setChildren([]); setBooks([]); setLogs([]); setRedemptions([]); setAchievements([]);
+                  setScreen("landing"); setMode("child");
+                }} aria-label="Log out">🚪</button>
+              ) : (
+                <button className="btn btn-ghost-sm" onClick={()=>{setActiveChildId(null);setChildPickMode(true);}} aria-label="Switch child">🔄</button>
+              )}
             </div>
           )}
           {mode==="parent" && (
@@ -1722,7 +1861,7 @@ export default function App() {
           <>
             {/* HOME */}
             {childView==="home" && (
-              dataLoading ? <LoadingSkeleton/> : <>
+              dataLoading ? <LoadingSkeleton/> : <div>
                 {/* First-time child welcome */}
                 {myBooks.length===0 && myLogs.length===0 ? (
                   <div className="slide-up" style={{textAlign:"center",padding:"10px 0 20px"}}>
@@ -1930,7 +2069,7 @@ export default function App() {
                     <div className="empty-state-body">Add a book and start logging pages to see your activity here. Every session you log earns rewards!</div>
                   </div>;
                 })()}
-              </></>
+              </div></>
             )}
 
             {/* ADD BOOK */}
@@ -2598,63 +2737,66 @@ export default function App() {
             })()}
 
             {/* SHARE WITH CHILD (after adding first child) */}
-            {parentView==="shareWithChild" && (
-              <div className="slide-up" style={{textAlign:"center",padding:"20px 0"}}>
-                <div style={{fontSize:64,marginBottom:12}}>🎉</div>
-                <div style={{fontSize:22,fontWeight:900,marginBottom:6}}>Child added!</div>
-                <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginBottom:24,lineHeight:1.6}}>
-                  Now share the app with your child so they can start logging their reading.
+            {parentView==="shareWithChild" && (()=>{
+              const lastChild = myChildren[myChildren.length - 1];
+              if (!lastChild) return <div className="slide-up"><button className="btn btn-primary" onClick={()=>setParentView("dashboard")}>Go to Dashboard →</button></div>;
+              return <div className="slide-up" style={{padding:"20px 0"}}>
+                <div style={{textAlign:"center",marginBottom:20}}>
+                  <div style={{fontSize:48,marginBottom:8}}>🎉</div>
+                  <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{lastChild.name} is ready!</div>
+                  <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.5}}>Share this login card with your child. They can screenshot it or you can send it.</div>
                 </div>
 
-                {/* Share link card */}
-                <div className="card" style={{padding:20,marginBottom:16,textAlign:"left"}}>
-                  <div className="slabel">APP LINK</div>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <input readOnly value="https://readreward.vercel.app" className="ifield" style={{fontSize:13,padding:"10px 12px"}}
-                      onClick={e=>e.target.select()}/>
-                    <button className="btn" onClick={()=>{
-                      navigator.clipboard?.writeText("https://readreward.vercel.app").then(()=>showToast("Link copied!","success")).catch(()=>{});
-                    }} style={{padding:"10px 14px",background:"rgba(71,118,230,0.2)",color:"#93C5FD",fontSize:12,flexShrink:0}}>📋 Copy</button>
+                {/* Visual login card — designed for screenshots */}
+                <div style={{background:"linear-gradient(135deg,#1a1a3e,#2d2b55)",border:"2px solid rgba(71,118,230,0.4)",borderRadius:20,padding:"24px 20px",marginBottom:16,position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",top:0,right:0,width:120,height:120,background:"radial-gradient(circle,rgba(71,118,230,0.15),transparent)",borderRadius:"0 0 0 100%"}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+                    <div style={{fontSize:28}}>📚</div>
+                    <div><div style={{fontSize:16,fontWeight:900}}>ReadReward</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Your login details</div></div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
+                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>FAMILY CODE</div>
+                      <div style={{fontSize:18,fontWeight:900,color:"#93C5FD",fontFamily:"monospace"}}>{parentAccount?.username}</div>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
+                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>USERNAME</div>
+                      <div style={{fontSize:18,fontWeight:900,color:"#FF8E53",fontFamily:"monospace"}}>{lastChild.username}</div>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
+                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>PIN</div>
+                      <div style={{fontSize:18,fontWeight:900,color:"#2ECC71",fontFamily:"monospace",letterSpacing:6}}>Ask your parent</div>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px"}}>
+                      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>LOGIN AT</div>
+                      <div style={{fontSize:14,fontWeight:700,color:"#8E54E9"}}>readreward.vercel.app</div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Share button (native share API) */}
+                {/* Action buttons */}
                 {navigator.share && (
                   <button className="btn btn-primary btn-orange" onClick={()=>{
                     navigator.share({
-                      title:"ReadReward",
-                      text:`Hey! Log in to ReadReward with your PIN to start earning rewards for reading! 📚`,
-                      url:"https://readreward.vercel.app"
+                      title:`ReadReward login for ${lastChild.name}`,
+                      text:`📚 ReadReward Login\n\nFamily Code: ${parentAccount?.username}\nUsername: ${lastChild.username}\nPIN: (ask parent)\n\nLogin at: readreward.vercel.app\nTap "I'm a Child" to get started!`,
                     }).catch(()=>{});
-                  }} style={{width:"100%",padding:"14px 0",fontSize:15,marginBottom:12}}>
-                    📤 Share with your child
+                  }} style={{width:"100%",padding:"14px 0",fontSize:15,marginBottom:10}}>
+                    📤 Share login card
                   </button>
                 )}
-
-                {/* How it works for kids */}
-                <div className="card" style={{padding:16,marginBottom:16,textAlign:"left"}}>
-                  <div style={{fontWeight:800,fontSize:14,marginBottom:12}}>What your child does:</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                      <div style={{width:24,height:24,borderRadius:"50%",background:"#FF6B35",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>1</div>
-                      <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>Opens the link → taps <strong>"I'm a Child"</strong></div>
-                    </div>
-                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                      <div style={{width:24,height:24,borderRadius:"50%",background:"#FF6B35",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>2</div>
-                      <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>Selects their name → enters their PIN</div>
-                    </div>
-                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                      <div style={{width:24,height:24,borderRadius:"50%",background:"#FF6B35",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>3</div>
-                      <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>Adds their first book and starts reading! 📖</div>
-                    </div>
-                  </div>
-                </div>
+                <button className="btn" onClick={()=>{
+                  const text = `📚 ReadReward Login\n\nFamily Code: ${parentAccount?.username}\nUsername: ${lastChild.username}\nPIN: (ask parent)\n\nLogin at: readreward.vercel.app`;
+                  navigator.clipboard?.writeText(text).then(()=>showToast("Login details copied!","success")).catch(()=>{});
+                }} style={{width:"100%",padding:"12px 0",fontSize:13,background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.6)",marginBottom:16}}>
+                  📋 Copy login details
+                </button>
 
                 <button className="btn btn-primary" onClick={()=>setParentView("dashboard")} style={{width:"100%",padding:"14px 0",fontSize:15}}>
                   Go to Dashboard →
                 </button>
-              </div>
-            )}
+              </div>;
+            })()}
 
             {/* SETUP TAB */}
             {parentView==="setup" && (
