@@ -1,3 +1,5 @@
+"build": "rm -rf node_modules/.vite && vite build"
+
 {
   "name": "readreward",
   "private": true,
